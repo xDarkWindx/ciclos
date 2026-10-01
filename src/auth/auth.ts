@@ -9,12 +9,34 @@ const ANDROID_CLIENT_ID = import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID as strin
 const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.appdata';
 const USER_KEY = 'ciclos.user';
 const REFRESH_KEY = 'ciclos.refresh';
+const TOKEN_KEY = 'ciclos.token';
 
 export const isNative = () => Capacitor.isNativePlatform();
 export const authConfigured = () => !!(isNative() ? ANDROID_CLIENT_ID : WEB_CLIENT_ID);
 export class NeedsReauth extends Error {}
 
-let token: { value: string; exp: number } | null = null;
+type Token = { value: string; exp: number };
+let token: Token | null = null;
+let pending: Promise<Token> | null = null;
+
+/** Guarda o token (vale ~1 h) para que recarregar o app não peça um novo — é isso que abre o pop-up do Google. */
+function saveToken(t: Token | null) {
+  token = t;
+  try {
+    if (t) localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* sem armazenamento: segue só em memória */
+  }
+}
+
+function loadToken(): Token | null {
+  try {
+    return JSON.parse(localStorage.getItem(TOKEN_KEY) ?? 'null');
+  } catch {
+    return null;
+  }
+}
 
 export function restoreUser(): User | null {
   try {
@@ -33,7 +55,7 @@ async function fetchUser(accessToken: string): Promise<User> {
 
 export async function signIn(): Promise<User> {
   const t = isNative() ? await nativeAuth() : await webAuth('select_account');
-  token = t;
+  saveToken(t);
   const user = await fetchUser(t.value);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   return user;
@@ -42,16 +64,25 @@ export async function signIn(): Promise<User> {
 export function signOut() {
   const g = (window as any).google?.accounts?.oauth2;
   if (g && token) g.revoke(token.value, () => {});
-  token = null;
+  saveToken(null);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(REFRESH_KEY);
 }
 
 /** Access token válido para a API do Drive; renova silenciosamente quando possível. */
 export async function getAccessToken(): Promise<string> {
-  if (token && token.exp - Date.now() > 60_000) return token.value;
-  token = isNative() ? await nativeRefresh() : await webAuth('', restoreUser()?.email);
-  return token.value;
+  const valid = (t: Token | null) => t !== null && t.exp - Date.now() > 60_000;
+  if (valid(token)) return token!.value;
+  const stored = loadToken();
+  if (valid(stored)) {
+    token = stored;
+    return stored!.value;
+  }
+  // Uma renovação por vez: evita abrir vários pop-ups se houver chamadas simultâneas.
+  pending ??= (isNative() ? nativeRefresh() : webAuth('', restoreUser()?.email))
+    .then((t) => (saveToken(t), t))
+    .finally(() => (pending = null));
+  return (await pending).value;
 }
 
 // ---------------- Web: Google Identity Services ----------------
