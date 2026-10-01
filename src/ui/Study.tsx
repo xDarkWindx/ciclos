@@ -43,7 +43,8 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   const total = steps.reduce((a, s) => a + s.targetSec, 0);
   const done = steps.reduce((a, s) => a + Math.min(s.doneSec, s.targetSec), 0);
   const pctAll = total ? (done / total) * 100 : 0;
-  const nextId = steps.find((s) => !s.done)?.id;
+  const next = steps.find((s) => !s.done);
+  const nextId = next?.id;
 
   return (
     <>
@@ -55,6 +56,13 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
         </div>
         <Bar pct={pctAll} />
       </div>
+
+      {!timer && next && run && (
+        <button className="btn primary big block" onClick={() => startStep(next, run.id)}>
+          ▶ {next.doneSec > 0 ? 'Continuar' : 'Iniciar'}: {next.subjectName}
+          <small> · falta {formatDuration(next.remainingSec)}</small>
+        </button>
+      )}
 
       {timer && (
         <div className="card timer" style={{ borderColor: timer.color }}>

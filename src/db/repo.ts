@@ -1,13 +1,9 @@
 import { all, one, run } from './sqlite';
 import { markDirty } from './store';
+import { pickDistinctColor } from '../core/colors';
 
 export const uid = () => crypto.randomUUID();
 const now = () => Date.now();
-
-export const PALETTE = [
-  '#2f6fed', '#e5484d', '#30a46c', '#f5a524', '#8e4ec6', '#12a594',
-  '#e93d82', '#f76b15', '#3e63dd', '#7ca82b', '#d6409f', '#0b7285',
-];
 
 // ---------- Matérias ----------
 export interface Subject { id: string; name: string; color: string }
@@ -17,8 +13,9 @@ export const listSubjects = () =>
 
 export function addSubject(name: string, color?: string): string {
   const id = uid();
-  const n = one<{ c: number }>('SELECT COUNT(*) c FROM subjects WHERE deleted=0')!.c;
-  run('INSERT INTO subjects(id,name,color,updated_at) VALUES(?,?,?,?)', [id, name.trim(), color ?? PALETTE[n % PALETTE.length], now()]);
+  // Sem cor informada, escolhe a mais distante das já usadas pelas outras matérias.
+  const chosen = color ?? pickDistinctColor(listSubjects().map((s) => s.color));
+  run('INSERT INTO subjects(id,name,color,updated_at) VALUES(?,?,?,?)', [id, name.trim(), chosen, now()]);
   markDirty();
   return id;
 }
@@ -114,17 +111,39 @@ export function deleteStep(id: string) {
   markDirty();
 }
 
-export function moveStep(cycleId: string, id: string, dir: -1 | 1) {
-  const steps = listSteps(cycleId);
-  const i = steps.findIndex((s) => s.id === id);
-  const j = i + dir;
-  if (i < 0 || j < 0 || j >= steps.length) return;
-  // Renumera tudo para evitar posições duplicadas vindas de edições concorrentes.
-  const order = steps.map((s) => s.id);
-  [order[i], order[j]] = [order[j], order[i]];
+/** Renumera as etapas na ordem dada (evita posições duplicadas vindas de edições concorrentes). */
+function renumber(order: string[]) {
   const t = now();
   order.forEach((sid, idx) => run('UPDATE cycle_steps SET position=?,updated_at=? WHERE id=?', [idx + 1, t, sid]));
   markDirty();
+}
+
+export function moveStep(cycleId: string, id: string, dir: -1 | 1) {
+  const i = listSteps(cycleId).findIndex((s) => s.id === id);
+  moveStepTo(cycleId, id, i + dir);
+}
+
+/** Move a etapa para o índice `toIndex` (0-based) da lista, deslocando as demais. */
+export function moveStepTo(cycleId: string, id: string, toIndex: number) {
+  const order = listSteps(cycleId).map((s) => s.id);
+  const from = order.indexOf(id);
+  if (from < 0 || toIndex < 0 || toIndex >= order.length || from === toIndex) return;
+  order.splice(toIndex, 0, order.splice(from, 1)[0]);
+  renumber(order);
+}
+
+/** Adiciona ao ciclo, ao final, as matérias cadastradas que ainda não estão nele. Retorna quantas entraram. */
+export function addMissingSubjects(cycleId: string, targetMin: number): number {
+  const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
+  // Ordem de cadastro (rowid), não alfabética: normalmente reflete a ordem do edital.
+  const missing = all<Subject>('SELECT id,name,color FROM subjects WHERE deleted=0 ORDER BY rowid').filter((s) => !present.has(s.id));
+  let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
+  const t = now();
+  for (const s of missing) {
+    run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, s.id, ++pos, Math.max(1, targetMin), t]);
+  }
+  if (missing.length) markDirty();
+  return missing.length;
 }
 
 // ---------- Voltas (runs) ----------

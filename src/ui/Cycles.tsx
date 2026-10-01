@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  addCycle, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, renameCycle,
+  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle,
   setActiveCycle, updateStep, type Cycle,
 } from '../db/repo';
 import { useVersion } from '../db/store';
@@ -62,6 +62,15 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
   const subjects = listSubjects();
   const [newSubject, setNewSubject] = useState('');
   const [newMin, setNewMin] = useState(40);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const dragIdx = steps.findIndex((s) => s.id === dragId);
+  const inCycle = new Set(steps.map((s) => s.subjectId));
+  const missing = subjects.filter((s) => !inCycle.has(s.id)).length;
+  const endDrag = () => {
+    setDragId(null);
+    setOverIdx(null);
+  };
 
   // Total por matéria (a mesma matéria pode aparecer em várias etapas)
   const totals = new Map<string, { name: string; color: string; min: number }>();
@@ -82,7 +91,34 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
       {subjects.length === 0 && <Empty>Cadastre matérias primeiro (aba “Matérias”).</Empty>}
       <ol className="list steps">
         {steps.map((s, i) => (
-          <li key={s.id} className="row gap wrap">
+          <li
+            key={s.id}
+            className={'row gap wrap' + (dragId === s.id ? ' dragging' : '') + (overIdx === i && dragIdx >= 0 && dragIdx !== i ? (dragIdx > i ? ' drop-above' : ' drop-below') : '')}
+            onDragOver={(e) => {
+              if (!dragId) return;
+              e.preventDefault();
+              setOverIdx(i);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragId) moveStepTo(id, dragId, i);
+              endDrag();
+            }}
+          >
+            <span
+              className="grip"
+              draggable
+              title="Arraste para reordenar"
+              aria-label="Arrastar para reordenar"
+              onDragStart={(e) => {
+                setDragId(s.id);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', s.id);
+                const li = e.currentTarget.closest('li');
+                if (li) e.dataTransfer.setDragImage(li, 16, 16);
+              }}
+              onDragEnd={endDrag}
+            >⠿</span>
             <span className="num">{i + 1}</span>
             <Dot color={s.color} />
             <select className="input grow" value={s.subjectId} onChange={(e) => updateStep(s.id, e.target.value, s.targetMin)} aria-label="Matéria">
@@ -103,6 +139,15 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
           </select>
           <input className="minutes" type="number" min={1} value={newMin} onChange={(e) => setNewMin(Number(e.target.value))} aria-label="Minutos" /> <span className="muted">min</span>
           <button className="btn primary" type="submit">+ Etapa</button>
+          <button
+            className="btn"
+            type="button"
+            disabled={missing === 0}
+            title="Adiciona ao final do ciclo as matérias que ainda não estão nele, com os minutos ao lado"
+            onClick={() => addMissingSubjects(id, newMin)}
+          >
+            {missing === 0 ? 'Todas já estão no ciclo' : `+ Todas as matérias (${missing})`}
+          </button>
         </form>
       )}
 
