@@ -51,6 +51,7 @@ textarea.input { resize: vertical; font: inherit; min-height: 40px; }
 .btn.big { padding: 12px 22px; font-weight: 600; } .btn.sm { padding: 4px 9px; min-height: 32px; }
 .input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; min-height: 40px; }
 .input.auto { width: auto; max-width: 60%; } .input.title { font-weight: 600; font-size: 17px; }
+.minutes.blocks { width: 56px; }
 .minutes { width: 70px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; text-align: center; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 label.row { flex-direction: row; align-items: center; }
