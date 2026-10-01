@@ -20,7 +20,7 @@ export default function Login({ onUser, onLocal }: { onUser: (u: User) => void; 
 
   return (
     <main className="login">
-      <img src="/icon.svg" alt="" width={72} height={72} />
+      <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={72} height={72} />
       <h1>Ciclos de Estudo</h1>
       <p className="muted">Monte seu ciclo, cronometre cada matéria e acompanhe sua evolução. Seus dados sincronizam entre celular e web pelo seu Google Drive.</p>
       {configured ? (

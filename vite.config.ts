@@ -2,7 +2,11 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// BASE_PATH=/ciclos/ no deploy do GitHub Pages; '/' em dev e no Capacitor.
+const base = process.env.BASE_PATH ?? '/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -17,7 +21,8 @@ export default defineConfig({
         theme_color: '#2f6fed',
         background_color: '#f5f6f8',
         display: 'standalone',
-        start_url: '/',
+        start_url: base,
+        scope: base,
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
       },
     }),

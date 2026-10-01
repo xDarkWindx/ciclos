@@ -61,3 +61,11 @@ src/sync    Drive appDataFolder + orquestração de sync
 src/ui      telas
 android/    projeto Capacitor
 ```
+
+## Deploy (GitHub Pages)
+
+O workflow `.github/workflows/deploy.yml` roda os testes, builda com `BASE_PATH=/<repo>/` e publica em `https://<usuario>.github.io/<repo>/` a cada push na `main`.
+
+1. Settings → Pages → **Source: GitHub Actions**.
+2. Settings → Secrets and variables → Actions → **Variables**: crie `VITE_GOOGLE_CLIENT_ID`.
+3. No Google Cloud, adicione `https://<usuario>.github.io` às origens JavaScript autorizadas do cliente Web.

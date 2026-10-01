@@ -89,7 +89,7 @@ export async function cancelFinishNotification() {
 /** Notificação do navegador (só quando a aba está em segundo plano). */
 export function webNotify(subject: string) {
   if (Capacitor.isNativePlatform() || document.visibilityState === 'visible') return;
-  if ('Notification' in window && Notification.permission === 'granted') new Notification('Tempo concluído!', { body: `Hora de encerrar ${subject}.`, icon: '/icon.svg' });
+  if ('Notification' in window && Notification.permission === 'granted') new Notification('Tempo concluído!', { body: `Hora de encerrar ${subject}.`, icon: `${import.meta.env.BASE_URL}icon.svg` });
 }
 
 // ---- Manter a tela ligada durante o estudo ----
