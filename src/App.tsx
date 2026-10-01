@@ -11,6 +11,7 @@ import Subjects from './ui/Subjects';
 import History from './ui/History';
 import Dashboard from './ui/Dashboard';
 import Settings from './ui/Settings';
+import TimerHost from './ui/TimerHost';
 
 const TABS = [
   ['estudar', '⏱', 'Estudar'],
@@ -74,6 +75,7 @@ export default function App() {
         {tab === 'historico' && <History />}
         {tab === 'conta' && <Settings user={user} local={local} onSignOut={logout} />}
       </main>
+      <TimerHost />
       <nav className="tabs" aria-label="Navegação">
         {TABS.map(([id, icon, label]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined}>

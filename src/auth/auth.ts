@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 
@@ -126,13 +126,14 @@ const b64url = (buf: ArrayBuffer | Uint8Array) =>
 const redirectUri = () => `com.googleusercontent.apps.${ANDROID_CLIENT_ID!.replace('.apps.googleusercontent.com', '')}:/oauth2redirect`;
 
 async function tokenRequest(params: Record<string, string>) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
+  // HTTP nativo do Capacitor: a requisição sai do Android, sem passar pelas regras de CORS do WebView.
+  const r = await CapacitorHttp.post({
+    url: 'https://oauth2.googleapis.com/token',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: ANDROID_CLIENT_ID!, ...params }),
+    data: { client_id: ANDROID_CLIENT_ID!, ...params },
   });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error_description ?? j.error ?? 'Falha no token');
+  const j = typeof r.data === 'string' ? JSON.parse(r.data || '{}') : r.data ?? {};
+  if (r.status < 200 || r.status >= 300) throw new Error(j.error_description ?? j.error ?? `Falha no token (${r.status})`);
   return j;
 }
 
@@ -149,16 +150,31 @@ async function nativeAuth(): Promise<{ value: string; exp: number }> {
     });
 
   const code = await new Promise<string>((resolve, reject) => {
-    const sub = App.addListener('appUrlOpen', async ({ url: cb }) => {
-      if (!cb.startsWith(redirectUri())) return;
-      (await sub).remove();
+    let settled = false;
+    const cleanup = async () => {
+      settled = true;
+      (await urlSub).remove();
+      (await closeSub).remove();
+    };
+    const urlSub = App.addListener('appUrlOpen', async ({ url: cb }) => {
+      if (settled || !cb.startsWith(redirectUri())) return;
+      await cleanup();
       await Browser.close().catch(() => {});
       const q = new URL(cb.replace(':/', '://')).searchParams;
       if (q.get('state') !== state) return reject(new Error('Resposta OAuth inválida'));
       const c = q.get('code');
       c ? resolve(c) : reject(new Error(q.get('error') ?? 'Login cancelado'));
     });
-    Browser.open({ url });
+    // Usuário fechou a aba do login sem concluir. Pequena espera: no retorno normal o
+    // navegador também fecha, e o appUrlOpen pode chegar logo em seguida.
+    const closeSub = Browser.addListener('browserFinished', () => {
+      setTimeout(async () => {
+        if (settled) return;
+        await cleanup();
+        reject(new Error('Login cancelado'));
+      }, 1500);
+    });
+    void Browser.open({ url });
   });
 
   const j = await tokenRequest({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri() });

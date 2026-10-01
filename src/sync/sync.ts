@@ -34,10 +34,11 @@ export function syncNow(): Promise<void> {
       if (!navigator.onLine) throw new Error('Sem conexão');
       const id = await findRemote();
       let changed = false;
+      let remoteBehind = true;
       if (id) {
         const tmp = await openTemp(await download(id));
         try {
-          changed = mergeRemote(tmp);
+          ({ changed, remoteBehind } = mergeRemote(tmp));
         } finally {
           tmp.close();
         }
@@ -46,7 +47,7 @@ export function syncNow(): Promise<void> {
         await persistNow();
         emit();
       }
-      if (!id || changed || isDirty()) {
+      if (!id || remoteBehind || isDirty()) {
         clearDirty(); // limpar antes do envio: mudanças feitas durante o upload ficam marcadas
         await upload(exportBytes(), id);
       }
@@ -65,6 +66,11 @@ export function syncNow(): Promise<void> {
 }
 
 let offDirty: (() => void) | undefined;
+const onOnline = () => void syncNow();
+const onVisible = () => {
+  if (document.visibilityState === 'visible') void syncNow();
+};
+
 export function startSync() {
   enabled = true;
   set({ state: 'idle' });
@@ -73,16 +79,18 @@ export function startSync() {
     clearTimeout(debounce);
     debounce = setTimeout(() => void syncNow(), 4000);
   });
-  window.addEventListener('online', () => void syncNow());
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void syncNow();
-  });
+  // add/removeEventListener com a mesma função: chamar startSync de novo não duplica.
+  window.addEventListener('online', onOnline);
+  document.addEventListener('visibilitychange', onVisible);
   void syncNow();
 }
 
 export function stopSync() {
   enabled = false;
   offDirty?.();
+  offDirty = undefined;
   clearTimeout(debounce);
+  window.removeEventListener('online', onOnline);
+  document.removeEventListener('visibilitychange', onVisible);
   set({ state: 'off' });
 }

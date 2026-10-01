@@ -50,6 +50,13 @@ npx cap open android    # abre no Android Studio para gerar o APK/AAB
 
 No Android o login usa OAuth2 + PKCE pelo navegador do sistema (o Google bloqueia login em WebView), com redirect por deep link e refresh token para renovar o acesso sem pedir login de novo.
 
+### APK pelo GitHub Actions
+
+O workflow `.github/workflows/android.yml` compila o APK a cada push e, na `main`, assina e publica numa **Release** (baixe `ciclos.apk` pelo celular e instale). Configuração única no repositório:
+
+- **Secrets:** `ANDROID_KEYSTORE_B64` (chave PKCS12 em base64) e `ANDROID_KEYSTORE_PASSWORD`. A chave precisa ser sempre a mesma: guarde uma cópia, sem ela não dá para atualizar o app.
+- **Variable:** `VITE_GOOGLE_ANDROID_CLIENT_ID` (cliente OAuth tipo Android: package `app.ciclos.estudos` + SHA-1 da chave, com "esquema de URI personalizado" ativado nas configurações avançadas).
+
 ## Como a sincronização funciona
 
 Toda tabela sincronizada tem `id` (UUID), `updated_at` e `deleted` (exclusão lógica). A cada mudança (e ao abrir/voltar online) o app: baixa o `ciclos.sqlite` do Drive → mescla linha a linha (vence o `updated_at` mais recente; exclusões propagam) → salva local → envia o arquivo mesclado. As voltas têm id determinístico (`<ciclo>:<n>`), então dois dispositivos que fecham a mesma volta não duplicam. O cronômetro em andamento é **local** a cada dispositivo (não sincroniza).

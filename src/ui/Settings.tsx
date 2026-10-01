@@ -56,7 +56,7 @@ export default function Settings({ user, onSignOut, local }: { user: User | null
         </div>
         <p className="muted small">O alarme toca ao chegar a zero (regressivo) ou ao atingir o tempo da etapa (progressivo). Vale para as próximas contagens.</p>
         <label>Meta diária (minutos)
-          <input className="input" type="number" min={0} step={10} defaultValue={goal} onBlur={(e) => setSetting('daily_goal_min', String(Math.max(0, Math.round(Number(e.target.value)))))} />
+          <input key={goal} className="input" type="number" min={0} step={10} defaultValue={goal} onBlur={(e) => setSetting('daily_goal_min', String(Math.max(0, Math.round(Number(e.target.value)))))} />
         </label>
         <button className="btn" onClick={() => void requestNotifyPermission()}>Permitir notificações do alarme</button>
       </div>

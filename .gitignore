@@ -9,3 +9,4 @@ android/local.properties
 android/.idea
 *.apk
 *.aab
+.android-signing/

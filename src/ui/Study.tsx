@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, runProgress, setActiveCycle, updateSubjectNote } from '../db/repo';
+import { closeRunIfComplete, ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, runProgress, setActiveCycle, updateSubjectNote } from '../db/repo';
 import { useVersion } from '../db/store';
-import { cancelTimer, dismissFinished, startStep, stopAndSave, togglePause, useFinished, useNow, useTimerState, type FinishInfo } from '../core/controller';
+import { cancelTimer, startStep, stopAndSave, togglePause, useNow, useTimerState } from '../core/controller';
 import { displaySeconds, formatClock, formatDuration, isRunning } from '../core/timer';
 import { Dot, Empty, Modal } from './common';
 
 export default function Study({ goTo }: { goTo: (t: string) => void }) {
   useVersion();
   const timer = useTimerState();
-  const finished = useFinished();
   const now = useNow(!!timer && isRunning(timer));
   const cycle = getActiveCycle();
   const run = cycle ? getCurrentRun(cycle.id) : undefined;
@@ -16,9 +15,12 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noteFor, setNoteFor] = useState<{ id: string; name: string } | null>(null);
 
+  const allDone = steps.length > 0 && steps.every((s) => s.done);
   useEffect(() => {
-    if (cycle && !run) ensureRun(cycle.id); // cria a volta fora do render
-  }, [cycle, run]);
+    if (!cycle) return;
+    if (!run) ensureRun(cycle.id); // cria a volta fora do render
+    else if (allDone && !timer) closeRunIfComplete(cycle.id); // completou por edição do ciclo ou sincronização
+  }, [cycle?.id, run?.id, allDone, timer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!cycle) {
     return (
@@ -121,27 +123,8 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
         </Modal>
       )}
 
-      {finished && <FinishedModal key={finished.subjectId + finished.seconds} info={finished} onClose={dismissFinished} />}
       {noteFor && <NoteModal subjectId={noteFor.id} name={noteFor.name} onClose={() => setNoteFor(null)} />}
     </>
-  );
-}
-
-function FinishedModal({ info, onClose }: { info: FinishInfo; onClose: () => void }) {
-  const [note, setNote] = useState(() => getSubject(info.subjectId)?.note ?? '');
-  const close = () => {
-    if (note.trim() !== (getSubject(info.subjectId)?.note ?? '')) updateSubjectNote(info.subjectId, note);
-    onClose();
-  };
-  return (
-    <Modal title={info.ringing ? '⏰ Tempo concluído!' : 'Sessão salva'} onClose={info.ringing ? undefined : close}>
-      <p><Dot color={info.color} /> <strong>{info.subjectName}</strong> — {formatDuration(info.seconds)} registrados.</p>
-      {info.runFinished && <p className="ok">🎉 Você fechou a volta do ciclo! Uma nova já foi iniciada.</p>}
-      <label>Onde parei (página, exercício…)
-        <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: cap. 3, pág. 45 · questões até a 12" autoFocus={!info.ringing} />
-      </label>
-      <div className="row end"><button className="btn primary big" onClick={close}>{info.ringing ? 'Parar alarme' : 'Fechar'}</button></div>
-    </Modal>
   );
 }
 

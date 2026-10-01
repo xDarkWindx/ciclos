@@ -16,15 +16,19 @@ async function engine(): Promise<SqlJsStatic> {
 /** Abre (ou cria) o banco local do usuário. */
 export async function openDb(userKey: string): Promise<void> {
   const sql = await engine();
-  dbKey = `db:${userKey}`;
-  const bytes = await idbGet(dbKey);
+  const key = `db:${userKey}`;
+  const bytes = await idbGet(key);
+  closeDb(); // se outra abertura terminou antes (ex.: troca rápida de conta), não deixa banco órfão
+  dbKey = key;
   db = bytes ? new sql.Database(bytes) : new sql.Database();
   migrate(db);
   if (!bytes) await persistNow();
 }
 
 export function closeDb() {
+  if (saveTimer !== undefined && db) void idbSet(dbKey, db.export()); // grava o que estava pendente
   clearTimeout(saveTimer);
+  saveTimer = undefined;
   db?.close();
   db = null;
 }
@@ -48,6 +52,7 @@ export function exportBytes(): Uint8Array {
 
 export async function persistNow() {
   clearTimeout(saveTimer);
+  saveTimer = undefined;
   if (db) await idbSet(dbKey, db.export());
 }
 

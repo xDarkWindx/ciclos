@@ -44,7 +44,7 @@ describe('mergeRemote', () => {
     subj(local, 'e', 'apagada-no-remoto', 100);
     subj(remote, 'e', 'apagada-no-remoto', 400, 1); // tombstone remoto vence
 
-    expect(mergeRemote(remote)).toBe(true);
+    expect(mergeRemote(remote)).toEqual({ changed: true, remoteBehind: true }); // 'a' e 'd' são mais novos/só no local
     expect(names(local)).toEqual([
       ['a', 'local-novo', 0], ['b', 'remoto-novo', 0], ['c', 'so-remoto', 0], ['d', 'so-local', 0], ['e', 'apagada-no-remoto', 1],
     ]);
@@ -60,5 +60,24 @@ describe('mergeRemote', () => {
     remote.run("INSERT INTO settings VALUES('daily_goal_min','90',10)");
     mergeRemote(remote);
     expect(local.exec('SELECT key,value FROM settings ORDER BY key')[0].values).toEqual([['daily_goal_min', '90'], ['timer_mode', 'progressive']]);
+  });
+
+  it('não pede reenvio quando local e remoto estão iguais', () => {
+    local = new SQL.Database();
+    migrate(local);
+    subj(local, 'a', 'x', 100);
+    const remote = new SQL.Database(local.export());
+    expect(mergeRemote(remote)).toEqual({ changed: false, remoteBehind: false });
+  });
+
+  it('pede reenvio quando o remoto está atrás (outro aparelho enviou um arquivo sem as mudanças locais)', () => {
+    local = new SQL.Database();
+    migrate(local);
+    const remote = new SQL.Database();
+    migrate(remote);
+    subj(local, 'a', 'x', 100);
+    subj(remote, 'a', 'x', 100);
+    subj(local, 'b', 'novo-local', 200); // criado aqui, ainda não está no Drive
+    expect(mergeRemote(remote)).toEqual({ changed: false, remoteBehind: true });
   });
 });
