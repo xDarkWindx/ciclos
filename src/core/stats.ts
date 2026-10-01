@@ -1,4 +1,5 @@
 import type { SessionRow } from '../db/repo';
+import { NO_CATEGORY } from './categories';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const dayKey = (ms: number) => {
@@ -55,4 +56,16 @@ export function totalsBySubject(sessions: SessionRow[], sinceMs = 0): SubjectTot
     m.set(s.subjectId, cur);
   }
   return [...m.values()].sort((a, b) => b.seconds - a.seconds);
+}
+
+export interface CategoryTotal { category: string; seconds: number }
+
+export function totalsByCategory(sessions: SessionRow[], sinceMs = 0): CategoryTotal[] {
+  const m = new Map<string, number>();
+  for (const s of sessions) {
+    if (s.startedAt < sinceMs) continue;
+    const c = s.category || NO_CATEGORY;
+    m.set(c, (m.get(c) ?? 0) + s.seconds);
+  }
+  return [...m].map(([category, seconds]) => ({ category, seconds })).sort((a, b) => b.seconds - a.seconds);
 }

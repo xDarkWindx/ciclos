@@ -8,7 +8,8 @@ import { finishAt, isFinished, pause, resume, secondsToSave, type TimerState } f
 let state: TimerState | null = null;
 const subs = new Set<() => void>();
 
-export interface FinishInfo { subjectName: string; color: string; seconds: number; runFinished: boolean }
+/** Resumo da sessão que acabou de ser salva. `ringing`: terminou sozinha e o alarme está tocando. */
+export interface FinishInfo { subjectId: string; subjectName: string; color: string; seconds: number; runFinished: boolean; ringing: boolean }
 let finished: FinishInfo | null = null;
 
 const notify = () => subs.forEach((f) => f());
@@ -70,13 +71,16 @@ export function cancelTimer() {
 }
 
 /** Encerra antes da meta e registra o que foi estudado (progresso parcial). */
-export function stopAndSave(): boolean {
-  if (!state) return false;
+export function stopAndSave() {
+  if (!state) return;
   const t = state;
   const secs = secondsToSave(t, Date.now());
   void cancelFinishNotification();
   set(null);
-  return secs > 0 ? commit(t, secs) : false;
+  if (secs <= 0) return;
+  const runFinished = commit(t, secs);
+  finished = { subjectId: t.subjectId, subjectName: t.subjectName, color: t.color, seconds: secs, runFinished, ringing: false };
+  notify();
 }
 
 function commit(t: TimerState, seconds: number): boolean {
@@ -92,7 +96,7 @@ function complete(silent = false) {
   void cancelFinishNotification();
   set(null);
   const runFinished = commit(t, t.targetSec);
-  finished = { subjectName: t.subjectName, color: t.color, seconds: t.targetSec, runFinished };
+  finished = { subjectId: t.subjectId, subjectName: t.subjectName, color: t.color, seconds: t.targetSec, runFinished, ringing: true };
   notify();
   startAlarm(); // se o navegador bloquear áudio sem interação prévia, o aviso na tela continua
   if (!silent) webNotify(t.subjectName);
