@@ -35,7 +35,14 @@ p { margin: 8px 0; }
 .btn:hover:not(:disabled) { border-color: var(--primary); }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
-.btn.danger { color: var(--danger); } .btn.big { padding: 12px 22px; font-weight: 600; } .btn.sm { padding: 4px 9px; min-height: 32px; }
+.btn.danger { color: var(--danger); } .btn.block { width: 100%; display: block; text-align: center; }
+.btn small { font-weight: 400; opacity: .85; }
+.grip { cursor: grab; color: var(--muted); font-size: 18px; padding: 0 4px; user-select: none; touch-action: none; }
+.grip:active { cursor: grabbing; }
+.list > li.dragging { opacity: .4; }
+.list > li.drop-above { box-shadow: 0 -3px 0 0 var(--primary); }
+.list > li.drop-below { box-shadow: 0 3px 0 0 var(--primary); }
+.btn.big { padding: 12px 22px; font-weight: 600; } .btn.sm { padding: 4px 9px; min-height: 32px; }
 .input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; min-height: 40px; }
 .input.auto { width: auto; max-width: 60%; } .input.title { font-weight: 600; font-size: 17px; }
 .minutes { width: 70px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font: inherit; text-align: center; }
