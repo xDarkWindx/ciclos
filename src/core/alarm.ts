@@ -53,6 +53,27 @@ export const isAlarmRinging = () => loop !== undefined;
 
 // ---- Notificação agendada (toca mesmo com o app em segundo plano / tela apagada no Android) ----
 const NOTIF_ID = 4242;
+const CHANNEL_ID = 'alarme-cronometro';
+let channelReady: Promise<void> | null = null;
+
+/**
+ * Canal próprio de importância máxima: aparece por cima da tela, toca o som `res/raw/alarme.wav`
+ * e vibra. (O canal padrão do plugin tem importância média e não chama atenção.)
+ * As configurações de um canal ficam fixas depois de criado; para mudá-las, use outro id.
+ */
+function ensureChannel(): Promise<void> {
+  channelReady ??= LocalNotifications.createChannel({
+    id: CHANNEL_ID,
+    name: 'Alarme do cronômetro',
+    description: 'Toca quando o tempo da matéria termina',
+    importance: 5,
+    visibility: 1,
+    sound: 'alarme.wav',
+    vibration: true,
+    lights: true,
+  }).catch(() => {});
+  return channelReady;
+}
 
 export async function requestNotifyPermission() {
   try {
@@ -68,9 +89,10 @@ export async function scheduleFinishNotification(atMs: number, subject: string) 
   const body = `Hora de encerrar ${subject}.`;
   try {
     if (Capacitor.isNativePlatform()) {
+      await ensureChannel();
       await LocalNotifications.cancel({ notifications: [{ id: NOTIF_ID }] });
       await LocalNotifications.schedule({
-        notifications: [{ id: NOTIF_ID, title, body, schedule: { at: new Date(atMs), allowWhileIdle: true } }],
+        notifications: [{ id: NOTIF_ID, title, body, channelId: CHANNEL_ID, autoCancel: true, schedule: { at: new Date(atMs), allowWhileIdle: true } }],
       });
     }
   } catch {
@@ -81,6 +103,17 @@ export async function scheduleFinishNotification(atMs: number, subject: string) 
 export async function cancelFinishNotification() {
   try {
     if (Capacitor.isNativePlatform()) await LocalNotifications.cancel({ notifications: [{ id: NOTIF_ID }] });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Ao parar o alarme: tira da bandeja a notificação já exibida e cancela uma ainda pendente. */
+export async function clearDeliveredAlarm() {
+  try {
+    if (!Capacitor.isNativePlatform()) return;
+    await LocalNotifications.cancel({ notifications: [{ id: NOTIF_ID }] });
+    await LocalNotifications.removeAllDeliveredNotifications();
   } catch {
     /* ignore */
   }

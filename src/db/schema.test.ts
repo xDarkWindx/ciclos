@@ -14,7 +14,7 @@ describe('migrate', () => {
     const row = db.exec("SELECT name,category,note FROM subjects WHERE id='s1'")[0].values[0];
     expect(row).toEqual(['Português', '', '']);
     migrate(db); // idempotente
-    expect(db.exec('PRAGMA user_version')[0].values[0][0]).toBe(2);
+    expect(db.exec('PRAGMA user_version')[0].values[0][0]).toBe(3);
   });
 
   it('cria banco novo já com as colunas', async () => {
@@ -23,5 +23,7 @@ describe('migrate', () => {
     migrate(db);
     const cols = db.exec('PRAGMA table_info(subjects)')[0].values.map((r) => r[1]);
     expect(cols).toEqual(expect.arrayContaining(['category', 'note']));
+    const scols = db.exec('PRAGMA table_info(sessions)')[0].values.map((r) => r[1]);
+    expect(scols).toContain('ended_at');
   });
 });

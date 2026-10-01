@@ -243,13 +243,17 @@ export function closeRunIfComplete(cycleId: string): boolean {
 // ---------- Sessões ----------
 export interface SessionRow {
   id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string; category: string;
-  cycleId: string | null; startedAt: number; seconds: number; targetSeconds: number | null; kind: string; note: string | null;
+  cycleId: string | null; startedAt: number; endedAt: number; seconds: number; targetSeconds: number | null; kind: string; note: string | null;
 }
+
+/** Fim da sessão: o gravado ou, em sessões antigas sem ele, início + tempo estudado. */
+const END_SQL = 'COALESCE(s.ended_at, s.started_at + s.seconds * 1000)';
 
 export const listSessions = () =>
   all<SessionRow>(
     `SELECT s.id, s.run_id AS runId, s.step_id AS stepId, s.subject_id AS subjectId, COALESCE(sub.name,'(matéria removida)') AS subjectName,
-            COALESCE(sub.color,'#999999') AS color, COALESCE(sub.category,'') AS category, s.cycle_id AS cycleId, s.started_at AS startedAt, s.seconds,
+            COALESCE(sub.color,'#999999') AS color, COALESCE(sub.category,'') AS category, s.cycle_id AS cycleId, s.started_at AS startedAt,
+            ${END_SQL} AS endedAt, s.seconds,
             s.target_seconds AS targetSeconds, s.kind, s.note
        FROM sessions s LEFT JOIN subjects sub ON sub.id=s.subject_id
       WHERE s.deleted=0 ORDER BY s.started_at DESC`,
@@ -257,15 +261,16 @@ export const listSessions = () =>
 
 export interface NewSession {
   runId: string | null; stepId: string | null; subjectId: string; cycleId: string | null;
-  startedAt: number; seconds: number; targetSeconds: number | null; kind: 'timer' | 'manual'; note?: string;
+  startedAt: number; endedAt?: number; seconds: number; targetSeconds: number | null; kind: 'timer' | 'manual'; note?: string;
 }
 
 /** Salva a sessão e avança o ciclo se necessário. Retorna true se a volta foi concluída. */
 export function saveSession(s: NewSession): boolean {
   if (s.seconds <= 0) return false;
   run(
-    'INSERT INTO sessions(id,run_id,step_id,subject_id,cycle_id,started_at,seconds,target_seconds,kind,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-    [uid(), s.runId, s.stepId, s.subjectId, s.cycleId, s.startedAt, Math.round(s.seconds), s.targetSeconds, s.kind, s.note ?? null, now()],
+    'INSERT INTO sessions(id,run_id,step_id,subject_id,cycle_id,started_at,ended_at,seconds,target_seconds,kind,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+    [uid(), s.runId, s.stepId, s.subjectId, s.cycleId, s.startedAt, s.endedAt ?? s.startedAt + Math.round(s.seconds) * 1000,
+      Math.round(s.seconds), s.targetSeconds, s.kind, s.note ?? null, now()],
   );
   const finished = s.runId && s.cycleId ? advanceIfComplete(s.cycleId, s.runId) : false;
   markDirty();
@@ -275,6 +280,24 @@ export function saveSession(s: NewSession): boolean {
 export function deleteSession(id: string) {
   run('UPDATE sessions SET deleted=1,updated_at=? WHERE id=?', [now(), id]);
   markDirty();
+}
+
+/** Corrige horários e tempo estudado de uma sessão (o tempo nunca passa do intervalo início–fim). */
+export function updateSession(id: string, startedAt: number, endedAt: number, seconds: number, note: string) {
+  const secs = Math.max(1, Math.min(Math.round(seconds), Math.round((endedAt - startedAt) / 1000)));
+  run('UPDATE sessions SET started_at=?,ended_at=?,seconds=?,note=?,updated_at=? WHERE id=?', [startedAt, endedAt, secs, note.trim() || null, now(), id]);
+  markDirty();
+}
+
+/** Intervalos (início–fim) estudados em cada etapa da volta, em ordem cronológica. */
+export function runSessionTimes(runId: string): Map<string, { start: number; end: number }[]> {
+  const m = new Map<string, { start: number; end: number }[]>();
+  for (const r of all<{ stepId: string; start: number; end: number }>(
+    `SELECT s.step_id AS stepId, s.started_at AS start, ${END_SQL} AS end FROM sessions s
+      WHERE s.run_id=? AND s.deleted=0 AND s.step_id IS NOT NULL ORDER BY s.started_at`,
+    [runId],
+  )) m.set(r.stepId, [...(m.get(r.stepId) ?? []), { start: r.start, end: r.end }]);
+  return m;
 }
 
 export function updateSessionNote(id: string, note: string) {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { getTimerMode, saveSession, type StepProgress } from '../db/repo';
 import { one, run, schedulePersist } from '../db/sqlite';
-import { cancelFinishNotification, keepAwake, requestNotifyPermission, scheduleFinishNotification, startAlarm, stopAlarm, unlockAudio, webNotify } from './alarm';
+import { cancelFinishNotification, clearDeliveredAlarm, keepAwake, requestNotifyPermission, scheduleFinishNotification, startAlarm, stopAlarm, unlockAudio, webNotify } from './alarm';
 import { finishAt, isFinished, pause, resume, secondsToSave, type TimerState } from './timer';
 
 // Estado do cronômetro vive fora do React e é persistido na tabela local timer_state.
@@ -105,24 +105,27 @@ export function stopAndSave() {
   void cancelFinishNotification();
   set(null);
   if (secs <= 0) return;
-  const runFinished = commit(t, secs);
+  const runFinished = commit(t, secs, Date.now());
   finished = { subjectId: t.subjectId, subjectName: t.subjectName, color: t.color, seconds: secs, runFinished, ringing: false };
   notify();
 }
 
-function commit(t: TimerState, seconds: number): boolean {
+function commit(t: TimerState, seconds: number, endedAt: number): boolean {
   return saveSession({
     runId: t.runId, stepId: t.stepId, subjectId: t.subjectId, cycleId: t.cycleId,
-    startedAt: t.sessionStartedAt, seconds, targetSeconds: t.targetSec, kind: 'timer',
+    startedAt: t.sessionStartedAt, endedAt, seconds, targetSeconds: t.targetSec, kind: 'timer',
   });
 }
 
 function complete(silent = false) {
   if (!state) return;
   const t = state;
-  void cancelFinishNotification();
+  // Não cancela a notificação agendada: ela vence no mesmo instante e é ela que toca de forma
+  // confiável no Android (o som pelo WebView pode estar mudo depois de o app ir para segundo plano).
+  // Se o app ficou fechado, o fim registrado é o momento em que a meta foi atingida.
+  const endedAt = Math.min(Date.now(), finishAt(t) ?? Date.now());
   set(null);
-  const runFinished = commit(t, t.targetSec);
+  const runFinished = commit(t, t.targetSec, endedAt);
   finished = { subjectId: t.subjectId, subjectName: t.subjectName, color: t.color, seconds: t.targetSec, runFinished, ringing: true };
   notify();
   startAlarm(); // se o navegador bloquear áudio sem interação prévia, o aviso na tela continua
@@ -131,6 +134,7 @@ function complete(silent = false) {
 
 export function dismissFinished() {
   stopAlarm();
+  void clearDeliveredAlarm();
   finished = null;
   notify();
 }

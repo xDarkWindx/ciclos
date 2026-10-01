@@ -137,7 +137,7 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
             >⠿</span>
             <span className="num">{i + 1}</span>
             <Dot color={s.color} />
-            <select className="input grow" value={s.subjectId} onChange={(e) => updateStep(s.id, e.target.value, s.targetMin)} aria-label="Matéria">
+            <select className="input grow step-subject" value={s.subjectId} onChange={(e) => updateStep(s.id, e.target.value, s.targetMin)} aria-label="Matéria">
               {subjects.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
             <MinutesInput value={s.targetMin} onCommit={(v) => updateStep(s.id, s.subjectId, v)} /> <span className="muted">min</span>
@@ -150,7 +150,7 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
 
       {subjects.length > 0 && (
         <form className="row gap wrap card" onSubmit={(e) => { e.preventDefault(); addStep(id, newSubject || subjects[0].id, newMin, newBlocks); }}>
-          <select className="input grow" value={newSubject || subjects[0].id} onChange={(e) => setNewSubject(e.target.value)} aria-label="Matéria da nova etapa">
+          <select className="input grow step-subject" value={newSubject || subjects[0].id} onChange={(e) => setNewSubject(e.target.value)} aria-label="Matéria da nova etapa">
             {subjects.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
           <input className="minutes" type="number" min={1} value={newMin} onChange={(e) => setNewMin(Number(e.target.value))} aria-label="Minutos" /> <span className="muted">min</span>
