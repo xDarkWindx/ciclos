@@ -118,9 +118,15 @@ export function listSteps(cycleId: string): Step[] {
   );
 }
 
-export function addStep(cycleId: string, subjectId: string, targetMin: number) {
-  const pos = (one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0) + 1;
-  run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, pos, targetMin, now()]);
+const clampBlocks = (n: number) => Math.min(50, Math.max(1, Math.round(n) || 1));
+
+/** Adiciona `blocks` etapas (blocos) da matéria ao final do ciclo, cada uma com `targetMin` minutos. */
+export function addStep(cycleId: string, subjectId: string, targetMin: number, blocks = 1) {
+  let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
+  const t = now();
+  for (let i = 0; i < clampBlocks(blocks); i++) {
+    run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, ++pos, Math.max(1, targetMin), t]);
+  }
   markDirty();
 }
 
@@ -162,15 +168,17 @@ export function reorderSteps(cycleId: string, orderedIds: string[]) {
   renumber(orderedIds);
 }
 
-/** Adiciona ao ciclo, ao final, as matérias cadastradas que ainda não estão nele. Retorna quantas entraram. */
-export function addMissingSubjects(cycleId: string, targetMin: number): number {
+/** Adiciona ao ciclo, ao final, as matérias cadastradas que ainda não estão nele (`blocks` etapas cada). Retorna quantas matérias entraram. */
+export function addMissingSubjects(cycleId: string, targetMin: number, blocks = 1): number {
   const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
   // Ordem de cadastro (rowid), não alfabética: normalmente reflete a ordem do edital.
   const missing = all<Subject>('SELECT id,name,color,category,note FROM subjects WHERE deleted=0 ORDER BY rowid').filter((s) => !present.has(s.id));
   let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
   const t = now();
   for (const s of missing) {
-    run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, s.id, ++pos, Math.max(1, targetMin), t]);
+    for (let i = 0; i < clampBlocks(blocks); i++) {
+      run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, s.id, ++pos, Math.max(1, targetMin), t]);
+    }
   }
   if (missing.length) markDirty();
   return missing.length;

@@ -64,6 +64,7 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
   const subjects = listSubjects();
   const [newSubject, setNewSubject] = useState('');
   const [newMin, setNewMin] = useState(40);
+  const [newBlocks, setNewBlocks] = useState(1);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const dragIdx = steps.findIndex((s) => s.id === dragId);
@@ -148,18 +149,20 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
       </ol>
 
       {subjects.length > 0 && (
-        <form className="row gap wrap card" onSubmit={(e) => { e.preventDefault(); addStep(id, newSubject || subjects[0].id, newMin); }}>
+        <form className="row gap wrap card" onSubmit={(e) => { e.preventDefault(); addStep(id, newSubject || subjects[0].id, newMin, newBlocks); }}>
           <select className="input grow" value={newSubject || subjects[0].id} onChange={(e) => setNewSubject(e.target.value)} aria-label="Matéria da nova etapa">
             {subjects.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
           <input className="minutes" type="number" min={1} value={newMin} onChange={(e) => setNewMin(Number(e.target.value))} aria-label="Minutos" /> <span className="muted">min</span>
-          <button className="btn primary" type="submit">+ Etapa</button>
+          <span className="muted">×</span>
+          <input className="minutes blocks" type="number" min={1} max={50} value={newBlocks} onChange={(e) => setNewBlocks(Number(e.target.value))} aria-label="Blocos a adicionar" title="Quantos blocos (etapas) adicionar de uma vez" /> <span className="muted">{newBlocks === 1 ? 'bloco' : 'blocos'}</span>
+          <button className="btn primary" type="submit">{newBlocks > 1 ? `+ ${newBlocks} etapas` : '+ Etapa'}</button>
           <button
             className="btn"
             type="button"
             disabled={missing === 0}
-            title="Adiciona ao final do ciclo as matérias que ainda não estão nele, com os minutos ao lado"
-            onClick={() => addMissingSubjects(id, newMin)}
+            title="Adiciona ao final do ciclo as matérias que ainda não estão nele, com os minutos e a quantidade de blocos ao lado"
+            onClick={() => addMissingSubjects(id, newMin, newBlocks)}
           >
             {missing === 0 ? 'Todas já estão no ciclo' : `+ Todas as matérias (${missing})`}
           </button>
