@@ -24,7 +24,33 @@ function set(next: TimerState | null) {
   state = next;
   persist();
   notify();
+  syncTicker();
   void keepAwake(!!next && next.startedAtMs !== null);
+}
+
+// Verificação do término independente da tela aberta: o alarme dispara mesmo fora da aba Estudar.
+let ticker: ReturnType<typeof setInterval> | undefined;
+
+function checkFinish() {
+  if (state?.startedAtMs && isFinished(state, Date.now())) complete();
+}
+
+function syncTicker() {
+  const running = !!state?.startedAtMs;
+  if (running && !ticker) ticker = setInterval(checkFinish, 500);
+  else if (!running && ticker) {
+    clearInterval(ticker);
+    ticker = undefined;
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    checkFinish();
+    // o navegador solta o "manter tela ligada" quando a página fica oculta; pede de novo ao voltar
+    if (state?.startedAtMs) void keepAwake(true);
+  });
 }
 
 /** Carrega o cronômetro salvo (chamar após abrir o banco). Se já passou do fim, encerra e avisa. */
@@ -33,6 +59,7 @@ export function loadTimer() {
   state = row?.json ? (JSON.parse(row.json) as TimerState) : null;
   finished = null;
   notify();
+  syncTicker();
   if (state && state.startedAtMs && isFinished(state, Date.now())) complete(true);
 }
 
@@ -115,16 +142,12 @@ export function useFinished() {
   return useSyncExternalStore(subscribe, () => finished);
 }
 
-/** Relógio de 250 ms enquanto houver cronômetro rodando; também detecta o término. */
+/** Relógio de 250 ms para exibição enquanto houver cronômetro rodando (o término é tratado pelo ticker). */
 export function useNow(active: boolean) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!active) return;
-    const tick = () => {
-      const n = Date.now();
-      setNow(n);
-      if (state?.startedAtMs && isFinished(state, n)) complete();
-    };
+    const tick = () => setNow(Date.now());
     const id = setInterval(tick, 250);
     document.addEventListener('visibilitychange', tick);
     tick();

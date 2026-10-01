@@ -13,7 +13,7 @@ async function authed(url: string, init: RequestInit = {}): Promise<Response> {
 
 export async function findRemote(): Promise<string | null> {
   const q = encodeURIComponent(`name='${FILE_NAME}' and trashed=false`);
-  const r = await authed(`${API}/files?spaces=appDataFolder&q=${q}&fields=files(id)&pageSize=1`);
+  const r = await authed(`${API}/files?spaces=appDataFolder&q=${q}&fields=files(id)&orderBy=createdTime&pageSize=1`);
   return (await r.json()).files?.[0]?.id ?? null;
 }
 

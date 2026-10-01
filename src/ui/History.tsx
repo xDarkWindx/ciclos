@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { deleteSession, listSessions, listSubjects, listSteps, getActiveCycle, getCurrentRun, saveSession, type SessionRow } from '../db/repo';
+import { deleteSession, listSessions, listSubjects, getActiveCycle, getCurrentRun, runProgress, saveSession, type SessionRow } from '../db/repo';
+import { isNative } from '../auth/auth';
 import { useVersion } from '../db/store';
 import { dayKey } from '../core/stats';
 import { formatDuration } from '../core/timer';
@@ -22,7 +23,7 @@ export default function History() {
         <h2>Histórico</h2>
         <div className="row gap">
           <button className="btn" onClick={() => setAdding(true)} disabled={subjects.length === 0}>+ Registro manual</button>
-          <button className="btn" onClick={() => exportCsv(all)} disabled={all.length === 0}>⬇ CSV</button>
+          {!isNative() && <button className="btn" onClick={() => exportCsv(all)} disabled={all.length === 0}>⬇ CSV</button>}
         </div>
       </div>
       <select className="input" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filtrar por matéria">
@@ -59,13 +60,14 @@ function ManualEntry({ onClose }: { onClose: () => void }) {
   const subjects = listSubjects();
   const cycle = getActiveCycle();
   const run = cycle ? getCurrentRun(cycle.id) : undefined;
-  const steps = cycle && run ? listSteps(cycle.id) : [];
+  const steps = cycle && run ? runProgress(cycle.id, run.id) : [];
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? '');
   const [min, setMin] = useState(30);
   const [date, setDate] = useState(() => dayKey(Date.now()));
   const [note, setNote] = useState('');
   const [countInCycle, setCountInCycle] = useState(true);
-  const step = steps.find((s) => s.subjectId === subjectId); // primeira etapa dessa matéria
+  // primeira etapa ainda pendente dessa matéria na volta atual (ou a primeira dela, se todas concluídas)
+  const step = steps.find((s) => s.subjectId === subjectId && !s.done) ?? steps.find((s) => s.subjectId === subjectId);
 
   const save = () => {
     const [y, m, d] = date.split('-').map(Number);

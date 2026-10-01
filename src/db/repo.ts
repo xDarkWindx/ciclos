@@ -227,7 +227,17 @@ function advanceIfComplete(cycleId: string, runId: string): boolean {
   const t = now();
   run('UPDATE runs SET finished_at=?,updated_at=? WHERE id=? AND finished_at IS NULL', [t, t, runId]);
   ensureRun(cycleId);
+  markDirty();
   return true;
+}
+
+/**
+ * Fecha a volta atual se já estiver completa sem uma sessão nova — acontece ao reduzir minutos
+ * ou remover etapas pendentes, ou quando sessões chegam de outro aparelho pela sincronização.
+ */
+export function closeRunIfComplete(cycleId: string): boolean {
+  const cur = getCurrentRun(cycleId);
+  return cur ? advanceIfComplete(cycleId, cur.id) : false;
 }
 
 // ---------- Sessões ----------

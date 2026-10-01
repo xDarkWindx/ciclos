@@ -150,16 +150,31 @@ async function nativeAuth(): Promise<{ value: string; exp: number }> {
     });
 
   const code = await new Promise<string>((resolve, reject) => {
-    const sub = App.addListener('appUrlOpen', async ({ url: cb }) => {
-      if (!cb.startsWith(redirectUri())) return;
-      (await sub).remove();
+    let settled = false;
+    const cleanup = async () => {
+      settled = true;
+      (await urlSub).remove();
+      (await closeSub).remove();
+    };
+    const urlSub = App.addListener('appUrlOpen', async ({ url: cb }) => {
+      if (settled || !cb.startsWith(redirectUri())) return;
+      await cleanup();
       await Browser.close().catch(() => {});
       const q = new URL(cb.replace(':/', '://')).searchParams;
       if (q.get('state') !== state) return reject(new Error('Resposta OAuth inválida'));
       const c = q.get('code');
       c ? resolve(c) : reject(new Error(q.get('error') ?? 'Login cancelado'));
     });
-    Browser.open({ url });
+    // Usuário fechou a aba do login sem concluir. Pequena espera: no retorno normal o
+    // navegador também fecha, e o appUrlOpen pode chegar logo em seguida.
+    const closeSub = Browser.addListener('browserFinished', () => {
+      setTimeout(async () => {
+        if (settled) return;
+        await cleanup();
+        reject(new Error('Login cancelado'));
+      }, 1500);
+    });
+    void Browser.open({ url });
   });
 
   const j = await tokenRequest({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri() });
