@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
-  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle,
+  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle, reorderSteps,
   setActiveCycle, updateStep, type Cycle,
 } from '../db/repo';
 import { useVersion } from '../db/store';
 import { formatDuration } from '../core/timer';
+import { spreadOrder } from '../core/shuffle';
 import { Dot, Empty, MinutesInput, Modal } from './common';
 
 export default function Cycles({ goTo }: { goTo: (t: string) => void }) {
@@ -87,7 +88,17 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
         <input className="input grow title" defaultValue={cycle.name} onBlur={(e) => e.target.value.trim() && renameCycle(id, e.target.value)} aria-label="Nome do ciclo" />
       </div>
 
-      <h3>Etapas</h3>
+      <div className="row between gap wrap">
+        <h3>Etapas</h3>
+        <button
+          className="btn"
+          disabled={steps.length < 3}
+          title="Reordena as etapas deixando as repetições da mesma matéria o mais distantes possível. Clique de novo para outra combinação."
+          onClick={() => reorderSteps(id, spreadOrder(steps.map((s) => s.subjectId)).map((i) => steps[i].id))}
+        >
+          🔀 Embaralhar
+        </button>
+      </div>
       {subjects.length === 0 && <Empty>Cadastre matérias primeiro (aba “Matérias”).</Empty>}
       <ol className="list steps">
         {steps.map((s, i) => (

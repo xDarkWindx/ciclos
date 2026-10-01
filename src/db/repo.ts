@@ -132,6 +132,13 @@ export function moveStepTo(cycleId: string, id: string, toIndex: number) {
   renumber(order);
 }
 
+/** Aplica uma nova ordem (lista de ids de etapas do ciclo). */
+export function reorderSteps(cycleId: string, orderedIds: string[]) {
+  const current = listSteps(cycleId).map((s) => s.id);
+  if (orderedIds.length !== current.length || !orderedIds.every((id) => current.includes(id))) return;
+  renumber(orderedIds);
+}
+
 /** Adiciona ao ciclo, ao final, as matérias cadastradas que ainda não estão nele. Retorna quantas entraram. */
 export function addMissingSubjects(cycleId: string, targetMin: number): number {
   const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
