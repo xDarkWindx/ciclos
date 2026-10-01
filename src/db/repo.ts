@@ -1,0 +1,216 @@
+import { all, one, run } from './sqlite';
+import { markDirty } from './store';
+
+export const uid = () => crypto.randomUUID();
+const now = () => Date.now();
+
+export const PALETTE = [
+  '#2f6fed', '#e5484d', '#30a46c', '#f5a524', '#8e4ec6', '#12a594',
+  '#e93d82', '#f76b15', '#3e63dd', '#7ca82b', '#d6409f', '#0b7285',
+];
+
+// ---------- Matérias ----------
+export interface Subject { id: string; name: string; color: string }
+
+export const listSubjects = () =>
+  all<Subject>('SELECT id,name,color FROM subjects WHERE deleted=0 ORDER BY name COLLATE NOCASE');
+
+export function addSubject(name: string, color?: string): string {
+  const id = uid();
+  const n = one<{ c: number }>('SELECT COUNT(*) c FROM subjects WHERE deleted=0')!.c;
+  run('INSERT INTO subjects(id,name,color,updated_at) VALUES(?,?,?,?)', [id, name.trim(), color ?? PALETTE[n % PALETTE.length], now()]);
+  markDirty();
+  return id;
+}
+
+export function updateSubject(id: string, name: string, color: string) {
+  run('UPDATE subjects SET name=?,color=?,updated_at=? WHERE id=?', [name.trim(), color, now(), id]);
+  markDirty();
+}
+
+export function deleteSubject(id: string) {
+  const t = now();
+  run('UPDATE subjects SET deleted=1,updated_at=? WHERE id=?', [t, id]);
+  run('UPDATE cycle_steps SET deleted=1,updated_at=? WHERE subject_id=? AND deleted=0', [t, id]);
+  markDirty();
+}
+
+// ---------- Configurações (sincronizadas) ----------
+export function getSetting(key: string): string | undefined {
+  return one<{ value: string }>('SELECT value FROM settings WHERE key=?', [key])?.value;
+}
+
+export function setSetting(key: string, value: string) {
+  run('INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', [key, value, now()]);
+  markDirty();
+}
+
+export type TimerMode = 'regressive' | 'progressive';
+export const getTimerMode = (): TimerMode => (getSetting('timer_mode') === 'progressive' ? 'progressive' : 'regressive');
+export const getDailyGoalMin = () => Number(getSetting('daily_goal_min') ?? 120);
+
+// ---------- Ciclos ----------
+export interface Cycle { id: string; name: string }
+export interface Step {
+  id: string; cycleId: string; subjectId: string; subjectName: string; color: string;
+  position: number; targetMin: number;
+}
+
+export const listCycles = () =>
+  all<Cycle>('SELECT id,name FROM cycles WHERE deleted=0 ORDER BY created_at');
+
+export function addCycle(name: string): string {
+  const id = uid();
+  const t = now();
+  run('INSERT INTO cycles(id,name,created_at,updated_at) VALUES(?,?,?,?)', [id, name.trim(), t, t]);
+  if (!getSetting('active_cycle_id') || !getActiveCycle()) setSetting('active_cycle_id', id);
+  markDirty();
+  return id;
+}
+
+export function renameCycle(id: string, name: string) {
+  run('UPDATE cycles SET name=?,updated_at=? WHERE id=?', [name.trim(), now(), id]);
+  markDirty();
+}
+
+export function deleteCycle(id: string) {
+  const t = now();
+  run('UPDATE cycles SET deleted=1,updated_at=? WHERE id=?', [t, id]);
+  run('UPDATE cycle_steps SET deleted=1,updated_at=? WHERE cycle_id=? AND deleted=0', [t, id]);
+  markDirty();
+}
+
+export function getActiveCycle(): Cycle | undefined {
+  const id = getSetting('active_cycle_id');
+  const list = listCycles();
+  return list.find((c) => c.id === id) ?? list[0];
+}
+
+export const setActiveCycle = (id: string) => setSetting('active_cycle_id', id);
+
+export function listSteps(cycleId: string): Step[] {
+  return all<Step>(
+    `SELECT s.id, s.cycle_id AS cycleId, s.subject_id AS subjectId, sub.name AS subjectName,
+            sub.color AS color, s.position, s.target_min AS targetMin
+       FROM cycle_steps s JOIN subjects sub ON sub.id = s.subject_id AND sub.deleted=0
+      WHERE s.cycle_id=? AND s.deleted=0 ORDER BY s.position, s.id`,
+    [cycleId],
+  );
+}
+
+export function addStep(cycleId: string, subjectId: string, targetMin: number) {
+  const pos = (one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0) + 1;
+  run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, pos, targetMin, now()]);
+  markDirty();
+}
+
+export function updateStep(id: string, subjectId: string, targetMin: number) {
+  run('UPDATE cycle_steps SET subject_id=?,target_min=?,updated_at=? WHERE id=?', [subjectId, Math.max(1, targetMin), now(), id]);
+  markDirty();
+}
+
+export function deleteStep(id: string) {
+  run('UPDATE cycle_steps SET deleted=1,updated_at=? WHERE id=?', [now(), id]);
+  markDirty();
+}
+
+export function moveStep(cycleId: string, id: string, dir: -1 | 1) {
+  const steps = listSteps(cycleId);
+  const i = steps.findIndex((s) => s.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= steps.length) return;
+  // Renumera tudo para evitar posições duplicadas vindas de edições concorrentes.
+  const order = steps.map((s) => s.id);
+  [order[i], order[j]] = [order[j], order[i]];
+  const t = now();
+  order.forEach((sid, idx) => run('UPDATE cycle_steps SET position=?,updated_at=? WHERE id=?', [idx + 1, t, sid]));
+  markDirty();
+}
+
+// ---------- Voltas (runs) ----------
+export interface Run { id: string; cycleId: string; number: number; startedAt: number; finishedAt: number | null }
+
+const runCols = 'id, cycle_id AS cycleId, number, started_at AS startedAt, finished_at AS finishedAt';
+
+export const getCurrentRun = (cycleId: string) =>
+  one<Run>(`SELECT ${runCols} FROM runs WHERE cycle_id=? AND finished_at IS NULL AND deleted=0 ORDER BY number DESC LIMIT 1`, [cycleId]);
+
+export const listRuns = (cycleId: string) =>
+  all<Run>(`SELECT ${runCols} FROM runs WHERE cycle_id=? AND deleted=0 ORDER BY number DESC`, [cycleId]);
+
+/** Garante que exista uma volta em andamento (cria a próxima se necessário). */
+export function ensureRun(cycleId: string): Run | undefined {
+  const cur = getCurrentRun(cycleId);
+  if (cur) return cur;
+  if (listSteps(cycleId).length === 0) return undefined;
+  const n = (one<{ m: number | null }>('SELECT MAX(number) m FROM runs WHERE cycle_id=?', [cycleId])?.m ?? 0) + 1;
+  const t = now();
+  run('INSERT OR IGNORE INTO runs(id,cycle_id,number,started_at,updated_at) VALUES(?,?,?,?,?)', [`${cycleId}:${n}`, cycleId, n, t, t]);
+  markDirty();
+  return getCurrentRun(cycleId);
+}
+
+export interface StepProgress extends Step { doneSec: number; targetSec: number; remainingSec: number; done: boolean }
+
+export function runProgress(cycleId: string, runId: string): StepProgress[] {
+  const done = new Map(
+    all<{ step_id: string; s: number }>('SELECT step_id, SUM(seconds) s FROM sessions WHERE run_id=? AND deleted=0 AND step_id IS NOT NULL GROUP BY step_id', [runId]).map((r) => [r.step_id, r.s]),
+  );
+  return listSteps(cycleId).map((st) => {
+    const doneSec = done.get(st.id) ?? 0;
+    const targetSec = st.targetMin * 60;
+    return { ...st, doneSec, targetSec, remainingSec: Math.max(0, targetSec - doneSec), done: doneSec >= targetSec };
+  });
+}
+
+/** Se todas as etapas da volta estão concluídas, fecha a volta e abre a próxima. */
+function advanceIfComplete(cycleId: string, runId: string): boolean {
+  const steps = runProgress(cycleId, runId);
+  if (steps.length === 0 || !steps.every((s) => s.done)) return false;
+  const t = now();
+  run('UPDATE runs SET finished_at=?,updated_at=? WHERE id=? AND finished_at IS NULL', [t, t, runId]);
+  ensureRun(cycleId);
+  return true;
+}
+
+// ---------- Sessões ----------
+export interface SessionRow {
+  id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string;
+  cycleId: string | null; startedAt: number; seconds: number; targetSeconds: number | null; kind: string; note: string | null;
+}
+
+export const listSessions = () =>
+  all<SessionRow>(
+    `SELECT s.id, s.run_id AS runId, s.step_id AS stepId, s.subject_id AS subjectId, COALESCE(sub.name,'(matéria removida)') AS subjectName,
+            COALESCE(sub.color,'#999999') AS color, s.cycle_id AS cycleId, s.started_at AS startedAt, s.seconds,
+            s.target_seconds AS targetSeconds, s.kind, s.note
+       FROM sessions s LEFT JOIN subjects sub ON sub.id=s.subject_id
+      WHERE s.deleted=0 ORDER BY s.started_at DESC`,
+  );
+
+export interface NewSession {
+  runId: string | null; stepId: string | null; subjectId: string; cycleId: string | null;
+  startedAt: number; seconds: number; targetSeconds: number | null; kind: 'timer' | 'manual'; note?: string;
+}
+
+/** Salva a sessão e avança o ciclo se necessário. Retorna true se a volta foi concluída. */
+export function saveSession(s: NewSession): boolean {
+  if (s.seconds <= 0) return false;
+  run(
+    'INSERT INTO sessions(id,run_id,step_id,subject_id,cycle_id,started_at,seconds,target_seconds,kind,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+    [uid(), s.runId, s.stepId, s.subjectId, s.cycleId, s.startedAt, Math.round(s.seconds), s.targetSeconds, s.kind, s.note ?? null, now()],
+  );
+  const finished = s.runId && s.cycleId ? advanceIfComplete(s.cycleId, s.runId) : false;
+  markDirty();
+  return finished;
+}
+
+export function deleteSession(id: string) {
+  run('UPDATE sessions SET deleted=1,updated_at=? WHERE id=?', [now(), id]);
+  markDirty();
+}
+
+export function updateSessionNote(id: string, note: string) {
+  run('UPDATE sessions SET note=?,updated_at=? WHERE id=?', [note || null, now(), id]);
+  markDirty();
+}
