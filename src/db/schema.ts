@@ -3,7 +3,7 @@ import type { Database } from 'sql.js';
 // Tabelas sincronizadas: todas têm id (TEXT), updated_at (ms) e deleted (tombstone).
 export const SYNCED_TABLES = ['subjects', 'cycles', 'cycle_steps', 'runs', 'sessions'] as const;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export function migrate(db: Database) {
   db.run(`
@@ -36,4 +36,8 @@ export function migrate(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);
     PRAGMA user_version = ${SCHEMA_VERSION};
   `);
+  // v2: classificação (Direito, Exatas, TI…) e anotação "onde parei" por matéria.
+  const cols = (db.exec('PRAGMA table_info(subjects)')[0]?.values ?? []).map((r) => r[1]);
+  if (!cols.includes('category')) db.run("ALTER TABLE subjects ADD COLUMN category TEXT NOT NULL DEFAULT ''");
+  if (!cols.includes('note')) db.run("ALTER TABLE subjects ADD COLUMN note TEXT NOT NULL DEFAULT ''");
 }

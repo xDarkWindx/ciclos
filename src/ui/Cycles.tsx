@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import {
-  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle,
+  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle, reorderSteps,
   setActiveCycle, updateStep, type Cycle,
 } from '../db/repo';
 import { useVersion } from '../db/store';
 import { formatDuration } from '../core/timer';
+import { spreadOrder } from '../core/shuffle';
+import { NO_CATEGORY } from '../core/categories';
 import { Dot, Empty, MinutesInput, Modal } from './common';
 
 export default function Cycles({ goTo }: { goTo: (t: string) => void }) {
@@ -80,6 +82,9 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
     totals.set(s.subjectId, t);
   });
 
+  const byCategory = new Map<string, number>();
+  steps.forEach((s) => byCategory.set(s.category || NO_CATEGORY, (byCategory.get(s.category || NO_CATEGORY) ?? 0) + s.targetMin));
+
   return (
     <>
       <div className="row gap">
@@ -87,7 +92,17 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
         <input className="input grow title" defaultValue={cycle.name} onBlur={(e) => e.target.value.trim() && renameCycle(id, e.target.value)} aria-label="Nome do ciclo" />
       </div>
 
-      <h3>Etapas</h3>
+      <div className="row between gap wrap">
+        <h3>Etapas</h3>
+        <button
+          className="btn"
+          disabled={steps.length < 3}
+          title="Reordena as etapas deixando as repetições da mesma matéria o mais distantes possível e evitando duas etapas seguidas da mesma classificação. Clique de novo para outra combinação."
+          onClick={() => reorderSteps(id, spreadOrder(steps.map((s) => s.subjectId), { categories: steps.map((s) => s.category) }).map((i) => steps[i].id))}
+        >
+          🔀 Embaralhar
+        </button>
+      </div>
       {subjects.length === 0 && <Empty>Cadastre matérias primeiro (aba “Matérias”).</Empty>}
       <ol className="list steps">
         {steps.map((s, i) => (
@@ -160,6 +175,16 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
             ))}
             <li className="row between"><span>Total do ciclo</span><strong>{formatDuration([...totals.values()].reduce((a, t) => a + t.min, 0) * 60)}</strong></li>
           </ul>
+          {byCategory.size > 0 && (
+            <>
+              <h3>Por classificação</h3>
+              <ul className="list">
+                {[...byCategory].sort((a, b) => b[1] - a[1]).map(([cat, min]) => (
+                  <li key={cat} className="row between"><span>{cat}</span><strong>{formatDuration(min * 60)}</strong></li>
+                ))}
+              </ul>
+            </>
+          )}
         </>
       )}
     </>

@@ -1,21 +1,44 @@
 import { all, one, run } from './sqlite';
 import { markDirty } from './store';
 import { pickDistinctColor } from '../core/colors';
+import { DEFAULT_CATEGORIES } from '../core/categories';
 
 export const uid = () => crypto.randomUUID();
 const now = () => Date.now();
 
 // ---------- Matérias ----------
-export interface Subject { id: string; name: string; color: string }
+export interface Subject { id: string; name: string; color: string; category: string; note: string }
+
 
 export const listSubjects = () =>
-  all<Subject>('SELECT id,name,color FROM subjects WHERE deleted=0 ORDER BY name COLLATE NOCASE');
+  all<Subject>('SELECT id,name,color,category,note FROM subjects WHERE deleted=0 ORDER BY name COLLATE NOCASE');
 
-export function addSubject(name: string, color?: string): string {
+/** Sugestões + classificações já usadas (sem repetir, ordenadas). */
+export function listCategories(): string[] {
+  const used = all<{ category: string }>("SELECT DISTINCT category FROM subjects WHERE deleted=0 AND category<>''").map((r) => r.category);
+  const lower = new Set(DEFAULT_CATEGORIES.map((c) => c.toLowerCase()));
+  return [...DEFAULT_CATEGORIES, ...used.filter((c) => !lower.has(c.toLowerCase())).sort((a, b) => a.localeCompare(b, 'pt-BR'))];
+}
+
+export const getSubject = (id: string) =>
+  one<Subject>('SELECT id,name,color,category,note FROM subjects WHERE id=?', [id]);
+
+export function updateSubjectCategory(id: string, category: string) {
+  run('UPDATE subjects SET category=?,updated_at=? WHERE id=?', [category.trim(), now(), id]);
+  markDirty();
+}
+
+/** Anotação livre da matéria ("parei na pág. 45 / exercício 12"). */
+export function updateSubjectNote(id: string, note: string) {
+  run('UPDATE subjects SET note=?,updated_at=? WHERE id=?', [note.trim(), now(), id]);
+  markDirty();
+}
+
+export function addSubject(name: string, color?: string, category = ''): string {
   const id = uid();
   // Sem cor informada, escolhe a mais distante das já usadas pelas outras matérias.
   const chosen = color ?? pickDistinctColor(listSubjects().map((s) => s.color));
-  run('INSERT INTO subjects(id,name,color,updated_at) VALUES(?,?,?,?)', [id, name.trim(), chosen, now()]);
+  run('INSERT INTO subjects(id,name,color,category,updated_at) VALUES(?,?,?,?,?)', [id, name.trim(), chosen, category.trim(), now()]);
   markDirty();
   return id;
 }
@@ -50,7 +73,7 @@ export const getDailyGoalMin = () => Number(getSetting('daily_goal_min') ?? 120)
 export interface Cycle { id: string; name: string }
 export interface Step {
   id: string; cycleId: string; subjectId: string; subjectName: string; color: string;
-  position: number; targetMin: number;
+  category: string; note: string; position: number; targetMin: number;
 }
 
 export const listCycles = () =>
@@ -88,7 +111,7 @@ export const setActiveCycle = (id: string) => setSetting('active_cycle_id', id);
 export function listSteps(cycleId: string): Step[] {
   return all<Step>(
     `SELECT s.id, s.cycle_id AS cycleId, s.subject_id AS subjectId, sub.name AS subjectName,
-            sub.color AS color, s.position, s.target_min AS targetMin
+            sub.color AS color, sub.category AS category, sub.note AS note, s.position, s.target_min AS targetMin
        FROM cycle_steps s JOIN subjects sub ON sub.id = s.subject_id AND sub.deleted=0
       WHERE s.cycle_id=? AND s.deleted=0 ORDER BY s.position, s.id`,
     [cycleId],
@@ -132,11 +155,18 @@ export function moveStepTo(cycleId: string, id: string, toIndex: number) {
   renumber(order);
 }
 
+/** Aplica uma nova ordem (lista de ids de etapas do ciclo). */
+export function reorderSteps(cycleId: string, orderedIds: string[]) {
+  const current = listSteps(cycleId).map((s) => s.id);
+  if (orderedIds.length !== current.length || !orderedIds.every((id) => current.includes(id))) return;
+  renumber(orderedIds);
+}
+
 /** Adiciona ao ciclo, ao final, as matérias cadastradas que ainda não estão nele. Retorna quantas entraram. */
 export function addMissingSubjects(cycleId: string, targetMin: number): number {
   const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
   // Ordem de cadastro (rowid), não alfabética: normalmente reflete a ordem do edital.
-  const missing = all<Subject>('SELECT id,name,color FROM subjects WHERE deleted=0 ORDER BY rowid').filter((s) => !present.has(s.id));
+  const missing = all<Subject>('SELECT id,name,color,category,note FROM subjects WHERE deleted=0 ORDER BY rowid').filter((s) => !present.has(s.id));
   let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
   const t = now();
   for (const s of missing) {
@@ -194,14 +224,14 @@ function advanceIfComplete(cycleId: string, runId: string): boolean {
 
 // ---------- Sessões ----------
 export interface SessionRow {
-  id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string;
+  id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string; category: string;
   cycleId: string | null; startedAt: number; seconds: number; targetSeconds: number | null; kind: string; note: string | null;
 }
 
 export const listSessions = () =>
   all<SessionRow>(
     `SELECT s.id, s.run_id AS runId, s.step_id AS stepId, s.subject_id AS subjectId, COALESCE(sub.name,'(matéria removida)') AS subjectName,
-            COALESCE(sub.color,'#999999') AS color, s.cycle_id AS cycleId, s.started_at AS startedAt, s.seconds,
+            COALESCE(sub.color,'#999999') AS color, COALESCE(sub.category,'') AS category, s.cycle_id AS cycleId, s.started_at AS startedAt, s.seconds,
             s.target_seconds AS targetSeconds, s.kind, s.note
        FROM sessions s LEFT JOIN subjects sub ON sub.id=s.subject_id
       WHERE s.deleted=0 ORDER BY s.started_at DESC`,

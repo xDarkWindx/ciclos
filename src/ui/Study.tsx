@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ensureRun, getActiveCycle, getCurrentRun, listCycles, listSessions, runProgress, setActiveCycle, updateSessionNote } from '../db/repo';
+import { ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, runProgress, setActiveCycle, updateSubjectNote } from '../db/repo';
 import { useVersion } from '../db/store';
-import { cancelTimer, dismissFinished, startStep, stopAndSave, togglePause, useFinished, useNow, useTimerState } from '../core/controller';
+import { cancelTimer, dismissFinished, startStep, stopAndSave, togglePause, useFinished, useNow, useTimerState, type FinishInfo } from '../core/controller';
 import { displaySeconds, formatClock, formatDuration, isRunning } from '../core/timer';
 import { Dot, Empty, Modal } from './common';
 
@@ -14,7 +14,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   const run = cycle ? getCurrentRun(cycle.id) : undefined;
   const steps = cycle && run ? runProgress(cycle.id, run.id) : [];
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [lastWasRunEnd, setLastWasRunEnd] = useState(false);
+  const [noteFor, setNoteFor] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     if (cycle && !run) ensureRun(cycle.id); // cria a volta fora do render
@@ -67,6 +67,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
       {timer && (
         <div className="card timer" style={{ borderColor: timer.color }}>
           <div className="row center muted"><Dot color={timer.color} /> {timer.subjectName}</div>
+          {getSubject(timer.subjectId)?.note && <div className="note-box">📝 {getSubject(timer.subjectId)!.note}</div>}
           <div className="clock" aria-live="off">{formatClock(displaySeconds(timer, now))}</div>
           <div className="muted center">
             {timer.mode === 'regressive' ? 'Regressivo' : 'Progressivo'} · meta {formatDuration(timer.targetSec)}
@@ -74,7 +75,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
           </div>
           <div className="row center gap">
             <button className="btn primary big" onClick={togglePause}>{isRunning(timer) ? '⏸ Pausar' : '▶ Continuar'}</button>
-            <button className="btn" onClick={() => setLastWasRunEnd(stopAndSave())}>⏹ Parar e salvar</button>
+            <button className="btn" onClick={stopAndSave}>⏹ Parar e salvar</button>
             <button className="btn danger" onClick={() => setConfirmCancel(true)}>✕ Cancelar</button>
           </div>
         </div>
@@ -88,17 +89,23 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
             <li key={s.id} className={'step' + (s.id === nextId && !timer ? ' next' : '')} style={{ borderLeftColor: s.color }}>
               <div className="grow">
                 <div className="name">{s.subjectName}</div>
+                {s.note && <div className="note-box small">📝 {s.note}</div>}
                 <div className="sub">
                   {s.done ? <span className="ok">Concluído!</span> : <span className="warn">Falta: {formatDuration(s.remainingSec)}</span>}
                   {' – '}<em>Meta: {formatDuration(s.targetSec)}</em>
                 </div>
                 <Bar pct={pct} done={s.done} />
               </div>
-              {!s.done && (
-                <button className="btn" disabled={!!timer} onClick={() => run && startStep(s, run.id)}>
-                  {active ? 'Em andamento' : '▶ Iniciar'}
+              <div className="stack tight">
+                {!s.done && (
+                  <button className="btn" disabled={!!timer} onClick={() => run && startStep(s, run.id)}>
+                    {active ? 'Em andamento' : '▶ Iniciar'}
+                  </button>
+                )}
+                <button className="btn sm" onClick={() => setNoteFor({ id: s.subjectId, name: s.subjectName })} title="Onde parei (anotação da matéria)" aria-label={`Anotação de ${s.subjectName}`}>
+                  📝 {s.note ? 'Editar' : 'Anotar'}
                 </button>
-              )}
+              </div>
             </li>
           );
         })}
@@ -114,32 +121,39 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
         </Modal>
       )}
 
-      {finished && <FinishedModal info={finished} onClose={dismissFinished} />}
-      {lastWasRunEnd && (
-        <Modal title="Ciclo concluído! 🎉" onClose={() => setLastWasRunEnd(false)}>
-          <p>Você completou a volta. Uma nova volta já foi iniciada.</p>
-          <div className="row end"><button className="btn primary" onClick={() => setLastWasRunEnd(false)}>Seguir</button></div>
-        </Modal>
-      )}
+      {finished && <FinishedModal key={finished.subjectId + finished.seconds} info={finished} onClose={dismissFinished} />}
+      {noteFor && <NoteModal subjectId={noteFor.id} name={noteFor.name} onClose={() => setNoteFor(null)} />}
     </>
   );
 }
 
-function FinishedModal({ info, onClose }: { info: { subjectName: string; color: string; seconds: number; runFinished: boolean }; onClose: () => void }) {
-  const [note, setNote] = useState('');
+function FinishedModal({ info, onClose }: { info: FinishInfo; onClose: () => void }) {
+  const [note, setNote] = useState(() => getSubject(info.subjectId)?.note ?? '');
   const close = () => {
-    if (note.trim()) {
-      const last = listSessions()[0];
-      if (last) updateSessionNote(last.id, note.trim());
-    }
+    if (note.trim() !== (getSubject(info.subjectId)?.note ?? '')) updateSubjectNote(info.subjectId, note);
     onClose();
   };
   return (
-    <Modal title="⏰ Tempo concluído!">
+    <Modal title={info.ringing ? '⏰ Tempo concluído!' : 'Sessão salva'} onClose={info.ringing ? undefined : close}>
       <p><Dot color={info.color} /> <strong>{info.subjectName}</strong> — {formatDuration(info.seconds)} registrados.</p>
       {info.runFinished && <p className="ok">🎉 Você fechou a volta do ciclo! Uma nova já foi iniciada.</p>}
-      <input className="input" placeholder="Anotação (opcional): o que estudou?" value={note} onChange={(e) => setNote(e.target.value)} />
-      <div className="row end"><button className="btn primary big" onClick={close}>Parar alarme</button></div>
+      <label>Onde parei (página, exercício…)
+        <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: cap. 3, pág. 45 · questões até a 12" autoFocus={!info.ringing} />
+      </label>
+      <div className="row end"><button className="btn primary big" onClick={close}>{info.ringing ? 'Parar alarme' : 'Fechar'}</button></div>
+    </Modal>
+  );
+}
+
+function NoteModal({ subjectId, name, onClose }: { subjectId: string; name: string; onClose: () => void }) {
+  const [note, setNote] = useState(() => getSubject(subjectId)?.note ?? '');
+  return (
+    <Modal title={`Onde parei · ${name}`} onClose={onClose}>
+      <textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: cap. 3, pág. 45 · questões até a 12" autoFocus />
+      <div className="row end gap">
+        <button className="btn" onClick={onClose}>Cancelar</button>
+        <button className="btn primary" onClick={() => { updateSubjectNote(subjectId, note); onClose(); }}>Salvar</button>
+      </div>
     </Modal>
   );
 }

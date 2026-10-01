@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getActiveCycle, getCurrentRun, getDailyGoalMin, listRuns, listSessions, runProgress } from '../db/repo';
 import { useVersion } from '../db/store';
-import { lastDays, startOfDay, streak, totalsBySubject } from '../core/stats';
+import { lastDays, startOfDay, streak, totalsByCategory, totalsBySubject } from '../core/stats';
 import { formatDuration } from '../core/timer';
 import { Dot, Empty } from './common';
 import { Bar } from './Study';
@@ -26,6 +26,8 @@ export default function Dashboard() {
   const since = period ? startOfDay(today) - (period - 1) * DAY : 0;
   const totals = totalsBySubject(sessions, since);
   const maxTotal = Math.max(1, ...totals.map((t) => t.seconds));
+  const catTotals = totalsByCategory(sessions, since);
+  const catSum = catTotals.reduce((a, c) => a + c.seconds, 0) || 1;
 
   if (sessions.length === 0 && progress.length === 0) {
     return (<><h2>Dashboard</h2><Empty>Os gráficos aparecem assim que você registrar o primeiro estudo.</Empty></>);
@@ -73,6 +75,17 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+      {catTotals.length > 0 && (
+        <div className="card">
+          <strong>Por classificação</strong>
+          {catTotals.map((c) => (
+            <div key={c.category} className="hrow">
+              <div className="row between"><span>{c.category}</span><span><strong>{formatDuration(c.seconds)}</strong> <span className="muted">· {Math.round((c.seconds / catSum) * 100)}%</span></span></div>
+              <div className="hbar"><div style={{ width: `${(c.seconds / catSum) * 100}%`, background: 'var(--primary)' }} /></div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="card">
         {totals.length === 0 && <span className="muted">Sem estudo no período.</span>}
         {totals.map((t) => (
