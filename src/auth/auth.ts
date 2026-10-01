@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 
@@ -126,13 +126,14 @@ const b64url = (buf: ArrayBuffer | Uint8Array) =>
 const redirectUri = () => `com.googleusercontent.apps.${ANDROID_CLIENT_ID!.replace('.apps.googleusercontent.com', '')}:/oauth2redirect`;
 
 async function tokenRequest(params: Record<string, string>) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
+  // HTTP nativo do Capacitor: a requisição sai do Android, sem passar pelas regras de CORS do WebView.
+  const r = await CapacitorHttp.post({
+    url: 'https://oauth2.googleapis.com/token',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: ANDROID_CLIENT_ID!, ...params }),
+    data: { client_id: ANDROID_CLIENT_ID!, ...params },
   });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error_description ?? j.error ?? 'Falha no token');
+  const j = typeof r.data === 'string' ? JSON.parse(r.data || '{}') : r.data ?? {};
+  if (r.status < 200 || r.status >= 300) throw new Error(j.error_description ?? j.error ?? `Falha no token (${r.status})`);
   return j;
 }
 

@@ -1,0 +1,94 @@
+name: Android (APK)
+
+# PR e branches de trabalho: compila para validar (e guarda o APK como artefato do run).
+# Push na main: compila, assina e publica o APK numa Release para baixar no celular.
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+
+      - name: Build web
+        run: npm run build
+        env:
+          # Defina em Settings > Secrets and variables > Actions > Variables
+          VITE_GOOGLE_ANDROID_CLIENT_ID: ${{ vars.VITE_GOOGLE_ANDROID_CLIENT_ID }}
+
+      - name: Copiar o app web para o projeto Android
+        run: npx cap sync android && node scripts/patch-android.mjs
+
+      - name: Preparar chave de assinatura
+        id: sign
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ciclos.p12"
+            echo "file=$RUNNER_TEMP/ciclos.p12" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Secret ANDROID_KEYSTORE_B64 ausente: o APK sai sem assinatura e não é publicado."
+          fi
+
+      - name: Compilar APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.sign.outputs.file }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CLIENT_ID: ${{ vars.VITE_GOOGLE_ANDROID_CLIENT_ID }}
+        run: |
+          if [ -n "$CLIENT_ID" ]; then
+            SCHEME="com.googleusercontent.apps.${CLIENT_ID%.apps.googleusercontent.com}"
+          else
+            echo "::warning::Variável VITE_GOOGLE_ANDROID_CLIENT_ID ausente: o login Google não vai funcionar no APK."
+            SCHEME="com.googleusercontent.apps.CONFIGURE_ME"
+          fi
+          ./gradlew assembleRelease --no-daemon \
+            -PgoogleRedirectScheme="$SCHEME" \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName="1.0.${{ github.run_number }}"
+          cp "$(ls app/build/outputs/apk/release/*.apk | head -1)" "$GITHUB_WORKSPACE/ciclos.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ciclos-apk
+          path: ciclos.apk
+
+      - name: Publicar na Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.sign.outputs.file != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ github.run_number }}
+          name: App Android 1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: ciclos.apk
+          body: |
+            Baixe o `ciclos.apk` abaixo no celular e toque para instalar.
+            Na primeira vez, permita instalar apps de fontes desconhecidas para o navegador.
