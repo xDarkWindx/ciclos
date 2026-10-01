@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { closeRunIfComplete, ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, runProgress, setActiveCycle, updateSubjectNote } from '../db/repo';
+import { closeRunIfComplete, ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, runProgress, runSessionTimes, setActiveCycle, updateSubjectNote } from '../db/repo';
 import { useVersion } from '../db/store';
 import { cancelTimer, startStep, stopAndSave, togglePause, useNow, useTimerState } from '../core/controller';
-import { displaySeconds, formatClock, formatDuration, isRunning } from '../core/timer';
-import { Dot, Empty, Modal } from './common';
+import { displaySeconds, finishAt, formatClock, formatDuration, isRunning } from '../core/timer';
+import { Dot, Empty, fmtRange, fmtTime, Modal } from './common';
 
 export default function Study({ goTo }: { goTo: (t: string) => void }) {
   useVersion();
@@ -12,6 +12,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   const cycle = getActiveCycle();
   const run = cycle ? getCurrentRun(cycle.id) : undefined;
   const steps = cycle && run ? runProgress(cycle.id, run.id) : [];
+  const times = run ? runSessionTimes(run.id) : new Map<string, { start: number; end: number }[]>();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noteFor, setNoteFor] = useState<{ id: string; name: string } | null>(null);
 
@@ -75,6 +76,10 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
             {timer.mode === 'regressive' ? 'Regressivo' : 'Progressivo'} · meta {formatDuration(timer.targetSec)}
             {!isRunning(timer) && ' · em pausa'}
           </div>
+          <div className="tiny muted center">
+            início {fmtTime(timer.sessionStartedAt)}
+            {isRunning(timer) ? ` · término previsto ${fmtTime(finishAt(timer)!)}` : ''}
+          </div>
           <div className="row center gap">
             <button className="btn primary big" onClick={togglePause}>{isRunning(timer) ? '⏸ Pausar' : '▶ Continuar'}</button>
             <button className="btn" onClick={stopAndSave}>⏹ Parar e salvar</button>
@@ -97,6 +102,9 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
                   {' – '}<em>Meta: {formatDuration(s.targetSec)}</em>
                 </div>
                 <Bar pct={pct} done={s.done} />
+                {times.get(s.id) && (
+                  <div className="tiny muted">⏱ {times.get(s.id)!.map((t) => fmtRange(t.start, t.end)).join(' · ')}</div>
+                )}
               </div>
               <div className="stack tight">
                 {!s.done && (

@@ -48,3 +48,20 @@ export function MinutesInput({ value, onCommit }: { value: number; onCommit: (v:
 export const fmtDate = (ms: number) =>
   new Date(ms).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
 export const fmtTime = (ms: number) => new Date(ms).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+/** 'HH:MM' para campos <input type="time">. */
+export const timeValue = (ms: number) => {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+/** Junta data 'AAAA-MM-DD' e hora 'HH:MM' (fuso local) em ms. */
+export const combineDateTime = (date: string, time: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = time.split(':').map(Number);
+  return new Date(y, m - 1, d, h || 0, min || 0).getTime();
+};
+
+/** '14:00–14:40' (com o dia seguinte marcado se passar da meia-noite). */
+export const fmtRange = (start: number, end: number) =>
+  `${fmtTime(start)}–${fmtTime(end)}${new Date(end).toDateString() !== new Date(start).toDateString() ? ' (+1d)' : ''}`;

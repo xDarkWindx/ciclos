@@ -23,7 +23,9 @@ if (!m.includes('${googleRedirectScheme}')) {
         </activity>`,
   );
 }
-for (const p of ['POST_NOTIFICATIONS', 'SCHEDULE_EXACT_ALARM', 'VIBRATE', 'WAKE_LOCK']) {
+// USE_EXACT_ALARM (Android 13+) é concedida na instalação a apps de alarme/cronômetro; sem alarme exato,
+// o Android 14+ adia a notificação até o aparelho sair do modo de economia (só toca ao desbloquear).
+for (const p of ['POST_NOTIFICATIONS', 'SCHEDULE_EXACT_ALARM', 'USE_EXACT_ALARM', 'VIBRATE', 'WAKE_LOCK']) {
   if (!m.includes(`android.permission.${p}"`)) m = m.replace('</manifest>', `    <uses-permission android:name="android.permission.${p}" />\n</manifest>`);
 }
 writeFileSync(manifest, m);
