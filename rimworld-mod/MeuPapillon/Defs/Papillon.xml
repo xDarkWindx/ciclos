@@ -68,6 +68,7 @@
     </tools>
     <race>
       <body>QuadrupedAnimalWithPaws</body>
+      <thinkTreeMain>Wisk_AnimalMain</thinkTreeMain>
       <herdAnimal>false</herdAnimal>
       <baseBodySize>0.35</baseBodySize>
       <baseHealthScale>0.6</baseHealthScale>
@@ -119,6 +120,9 @@
         <li>(-0.18, 0, 0.1)</li>
       </headPosPerRotation>
     </race>
+    <comps>
+      <li Class="Wisk.CompProperties_Wisk" />
+    </comps>
     <tradeTags>
       <li>AnimalCommon</li>
       <li>AnimalPet</li>

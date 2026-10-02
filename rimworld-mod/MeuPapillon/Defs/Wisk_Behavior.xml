@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+
+  <!-- Árvore de pensamento: primeiro tenta seguir o favorito, senão cai na árvore normal de animais -->
+  <ThinkTreeDef>
+    <defName>Wisk_AnimalMain</defName>
+    <thinkRoot Class="ThinkNode_Priority">
+      <subNodes>
+        <li Class="Wisk.JobGiver_FollowFavorite" />
+        <li Class="ThinkNode_Subtree">
+          <treeDef>Animal</treeDef>
+        </li>
+      </subNodes>
+    </thinkRoot>
+  </ThinkTreeDef>
+
+  <JobDef>
+    <defName>Wisk_FollowFavorite</defName>
+    <driverClass>Wisk.JobDriver_FollowFavorite</driverClass>
+    <reportString>seguindo TargetA.</reportString>
+    <casualInterruptible>true</casualInterruptible>
+  </JobDef>
+
+  <!-- Recreação: brincar com o cachorro -->
+  <JoyKindDef>
+    <defName>Wisk_PetPlay</defName>
+    <label>brincar com pet</label>
+  </JoyKindDef>
+
+  <JobDef>
+    <defName>Wisk_PlayWithPet</defName>
+    <driverClass>Wisk.JobDriver_PlayWithPet</driverClass>
+    <reportString>brincando com TargetA.</reportString>
+    <joyDuration>800</joyDuration>
+    <joyGainRate>1.0</joyGainRate>
+    <joyKind>Wisk_PetPlay</joyKind>
+    <casualInterruptible>true</casualInterruptible>
+  </JobDef>
+
+  <JoyGiverDef>
+    <defName>Wisk_PlayWithPet</defName>
+    <giverClass>Wisk.JoyGiver_PlayWithPet</giverClass>
+    <baseChance>0.7</baseChance>
+    <jobDef>Wisk_PlayWithPet</jobDef>
+    <joyKind>Wisk_PetPlay</joyKind>
+    <requiredCapacities>
+      <li>Moving</li>
+    </requiredCapacities>
+  </JoyGiverDef>
+
+  <ThoughtDef>
+    <defName>Wisk_PlayedWithPet</defName>
+    <durationDays>0.6</durationDays>
+    <stackLimit>3</stackLimit>
+    <stackedEffectMultiplier>0.7</stackedEffectMultiplier>
+    <stages>
+      <li>
+        <label>brincou com o cachorro</label>
+        <description>Brincar com o cachorro melhorou meu dia.</description>
+        <baseMoodEffect>3</baseMoodEffect>
+      </li>
+    </stages>
+  </ThoughtDef>
+
+</Defs>

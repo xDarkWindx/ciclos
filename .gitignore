@@ -10,3 +10,6 @@ android/.idea
 *.apk
 *.aab
 .android-signing/
+
+rimworld-mod/Source/obj/
+rimworld-mod/Source/bin/
