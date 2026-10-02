@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>Meu Papillon</name>
+  <author>darkwind</author>
+  <packageId>darkwind.meupapillon</packageId>
+  <supportedVersions>
+    <li>1.5</li>
+    <li>1.6</li>
+  </supportedVersions>
+  <description>Adiciona um cachorro Papillon (preto e branco) como animal domesticável, baseado no cachorro de verdade do autor.\n\nPequeno, rápido, muito fofo e ótimo pra criar vínculo. Aparece nos mercadores de animais e pode ser gerado pelo modo desenvolvedor (Papillon).</description>
+</ModMetaData>
