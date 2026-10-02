@@ -9,6 +9,7 @@ namespace Wisk
     {
         private const int MinHideTicks = 900;       // sem dano por 15 s
         private const int MaxHideTicks = 7500;
+        private const int RestTicks = 7500;         // ~3 h de jogo deitado, se estiver ferido
 
         public override bool TryMakePreToilReservations(bool errorOnFailed) => true;
 
@@ -32,9 +33,31 @@ namespace Wisk
                 int now = Find.TickManager.TicksGame;
                 bool calm = comp == null || now - comp.lastDamageTick > MinHideTicks;
                 if ((calm && !WiskUtility.ThreatNear(pawn, 20f)) || now - started > MaxHideTicks)
-                    EndJobWith(JobCondition.Succeeded);
+                    ReadyForNextToil(); // segue para o descanso
             };
             yield return hide;
+
+            // ferido: fica deitado descansando antes de voltar à vida normal
+            Toil rest = new Toil();
+            rest.defaultCompleteMode = ToilCompleteMode.Delay;
+            rest.defaultDuration = RestTicks;
+            rest.socialMode = RandomSocialMode.Off;
+            rest.initAction = () =>
+            {
+                if (pawn.health.summaryHealth.SummaryHealthPercent >= 0.9f)
+                {
+                    EndJobWith(JobCondition.Succeeded);
+                    return;
+                }
+                pawn.jobs.posture = PawnPosture.LayingOnGroundNormal;
+            };
+            rest.tickAction = () =>
+            {
+                if (pawn.IsHashIntervalTick(60) && WiskUtility.ThreatNear(pawn, 12f))
+                    EndJobWith(JobCondition.Succeeded);
+            };
+            rest.AddFinishAction(() => pawn.jobs.posture = PawnPosture.Standing);
+            yield return rest;
         }
 
         public override string GetReport() => "fugindo para um lugar seguro.";

@@ -14,6 +14,9 @@ namespace Wisk
             if (pawn.Downed || pawn.InMentalState || !pawn.Awake() || !pawn.DevelopmentalStage.Adult()) return null;
             if (!CompWisk.InHome(pawn)) return null;
 
+            // ferido: descansa em vez de brincar/seguir
+            if (pawn.health.summaryHealth.SummaryHealthPercent < 0.9f) return null;
+
             Need_Food food = pawn.needs?.food;
             if (food != null && food.CurLevelPercentage < 0.5f) return null;
             Need_Rest rest = pawn.needs?.rest;

@@ -15,6 +15,9 @@ namespace Wisk
             if (!CompWisk.InHome(pawn)) return null;
 
             // deixa o instinto básico ganhar: fome e cansaço
+            // ferido: descansa em vez de brincar/seguir
+            if (pawn.health.summaryHealth.SummaryHealthPercent < 0.9f) return null;
+
             Need_Food food = pawn.needs?.food;
             if (food != null && food.CurLevelPercentage < 0.35f) return null;
             Need_Rest rest = pawn.needs?.rest;
