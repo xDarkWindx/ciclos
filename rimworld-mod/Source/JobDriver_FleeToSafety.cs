@@ -16,7 +16,7 @@ namespace Wisk
         protected override IEnumerable<Toil> MakeNewToils()
         {
             // terminou a fuga (ou foi interrompida): não repetir sem novo dano
-            AddFinishAction(() =>
+            AddFinishAction(_ =>
             {
                 CompWisk c = pawn.TryGetComp<CompWisk>();
                 if (c != null) c.fleeRequested = false;
