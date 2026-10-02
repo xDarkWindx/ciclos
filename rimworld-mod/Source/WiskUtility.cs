@@ -74,5 +74,61 @@ namespace Wisk
             }
             return best;
         }
+
+        /// <summary>Morte do Wisk: todo colono sofre; se foi morto por alguém, esse alguém vira persona non grata.</summary>
+        public static void HandleDeath(Pawn dog, DamageInfo? dinfo, int goodwillPenalty)
+        {
+            Pawn killer = dinfo?.Instigator as Pawn;
+            if (killer == dog) killer = null;
+            bool friendlyFire = killer != null && killer.Faction == Faction.OfPlayer
+                && dinfo.Value.Def != null && dinfo.Value.Def.isRanged; // provável bala perdida, não de propósito
+            bool deliberate = killer != null && !friendlyFire;
+
+            foreach (Pawn colonist in PawnsFinder.AllMaps_FreeColonists)
+            {
+                if (colonist.needs?.mood == null) continue;
+                colonist.needs.mood.thoughts.memories.TryGainMemory(WiskDefOf.Wisk_Died);
+                if (deliberate && colonist != killer && colonist.RaceProps.Humanlike)
+                    colonist.needs.mood.thoughts.memories.TryGainMemory(WiskDefOf.Wisk_KilledWisk, killer);
+            }
+
+            if (!deliberate) return;
+
+            if (killer.needs?.mood != null && killer.Faction == Faction.OfPlayer)
+                killer.needs.mood.thoughts.memories.TryGainMemory(WiskDefOf.Wisk_IKilledWisk);
+
+            Find.LetterStack.ReceiveLetter(
+                "Wisk foi morto",
+                killer.LabelShort + " matou o Wisk de propósito. Ninguém, em facção nenhuma, perdoa uma coisa dessas.",
+                LetterDefOf.NegativeEvent, new LookTargets(dog.PositionHeld, dog.MapHeld));
+
+            ApplyFactionFallout(killer.Faction, goodwillPenalty);
+        }
+
+        private static void ApplyFactionFallout(Faction killerFaction, int penalty)
+        {
+            if (killerFaction == null) return;
+            try
+            {
+                if (killerFaction == Faction.OfPlayer)
+                {
+                    // o jogador matou: todas as facções (que não sejam inimigas) ficam horrorizadas
+                    foreach (Faction f in Find.FactionManager.AllFactionsVisible)
+                    {
+                        if (f.IsPlayer || f.HostileTo(Faction.OfPlayer)) continue;
+                        f.TryAffectGoodwillWith(Faction.OfPlayer, -penalty, true, true, null, null);
+                    }
+                }
+                else if (!killerFaction.HostileTo(Faction.OfPlayer))
+                {
+                    // um aliado/neutro matou o Wisk: a relação com o jogador desaba
+                    killerFaction.TryAffectGoodwillWith(Faction.OfPlayer, -penalty * 2, true, true, null, null);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.Warning("[Wisk] Falha ao aplicar a penalidade de facção: " + e.Message);
+            }
+        }
     }
 }

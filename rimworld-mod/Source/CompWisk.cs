@@ -1,3 +1,4 @@
+using System.Linq;
 using RimWorld;
 using Verse;
 using Verse.AI;
@@ -16,8 +17,15 @@ namespace Wisk
         public IntRange zoomiesTicks = new IntRange(900, 1800);      // 15 a 30 s
         public IntRange zoomiesCooldownTicks = new IntRange(20000, 40000);
 
-        // proteção
+        // proteção (quase imortal)
         public float rangedDodgeChance = 0.9f;                       // 90% dos tiros "erram"
+        public float damageFactor = 0.3f;                            // só 30% do dano que passar é aplicado
+        public float lowHealthPercent = 0.35f;                       // abaixo disso, o dano cai ainda mais (x0,25)
+        public int regenInterval = 250;                              // a cada ~4 s cura ferimentos
+        public float regenAmount = 3f;
+
+        // consequências de matar
+        public int killerGoodwillPenalty = 40;                       // facção do assassino perde isso com as outras
 
         public CompProperties_Wisk()
         {
@@ -34,6 +42,7 @@ namespace Wisk
         public bool fleeRequested;
         public int lastDamageTick = -99999;
         private int nextFleeTryTick;
+        private int lastRegenTick;
 
         public CompProperties_Wisk Props => (CompProperties_Wisk)props;
 
@@ -58,7 +67,35 @@ namespace Wisk
                 absorbed = true;
                 if (pawn.Spawned)
                     MoteMaker.ThrowText(pawn.DrawPos, pawn.Map, "errou!", 1.5f);
+                return;
             }
+
+            // o dano que passar é amortecido; quase morto, amortece ainda mais
+            float factor = Props.damageFactor;
+            if (pawn.health.summaryHealth.SummaryHealthPercent < Props.lowHealthPercent)
+                factor *= 0.25f;
+            dinfo.SetAmount(dinfo.Amount * factor);
+        }
+
+        // ---- regeneração ----
+        private void Regen(Pawn pawn)
+        {
+            int now = Find.TickManager.TicksGame;
+            if (now - lastRegenTick < Props.regenInterval) return;
+            lastRegenTick = now;
+            foreach (Hediff h in pawn.health.hediffSet.hediffs.ToArray())
+            {
+                if (h is Hediff_Injury injury)
+                    injury.Heal(Props.regenAmount);
+            }
+        }
+
+        // ---- morte: consequências ----
+        public override void Notify_Killed(Map prevMap, DamageInfo? dinfo = null)
+        {
+            Pawn dog = parent as Pawn;
+            if (dog == null) return;
+            WiskUtility.HandleDeath(dog, dinfo, Props.killerGoodwillPenalty);
         }
 
         // ---- qualquer dano que passar → foge ----
@@ -70,15 +107,22 @@ namespace Wisk
             lastDamageTick = Find.TickManager.TicksGame;
         }
 
-        public override void CompTick() => CheckFlee();
+        public override void CompTick() => DoTick();
 
-        public override void CompTickInterval(int delta) => CheckFlee();
+        public override void CompTickInterval(int delta) => DoTick();
 
-        private void CheckFlee()
+        private void DoTick()
+        {
+            Pawn pawn = parent as Pawn;
+            if (pawn == null || !pawn.Spawned || pawn.Dead) return;
+            Regen(pawn);
+            CheckFlee(pawn);
+        }
+
+        private void CheckFlee(Pawn pawn)
         {
             if (!fleeRequested) return;
-            Pawn pawn = parent as Pawn;
-            if (pawn == null || !pawn.Spawned || pawn.Dead || pawn.Downed) return;
+            if (pawn.Downed) return;
             if (pawn.CurJobDef == WiskDefOf.Wisk_FleeToSafety) return;
             int now = Find.TickManager.TicksGame;
             if (now < nextFleeTryTick) return;

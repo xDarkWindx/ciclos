@@ -12,6 +12,9 @@ namespace Wisk
         public static JobDef Wisk_Zoomies;
         public static ThoughtDef Wisk_PlayedWithPet;
         public static ThoughtDef Wisk_WatchedZoomies;
+        public static ThoughtDef Wisk_Died;
+        public static ThoughtDef Wisk_KilledWisk;
+        public static ThoughtDef Wisk_IKilledWisk;
 
         static WiskDefOf()
         {
