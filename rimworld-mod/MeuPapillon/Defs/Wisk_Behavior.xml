@@ -39,6 +39,13 @@
   </JobDef>
 
   <JobDef>
+    <defName>Wisk_TauntOrbit</defName>
+    <driverClass>Wisk.JobDriver_TauntOrbit</driverClass>
+    <reportString>provocando TargetA.</reportString>
+    <casualInterruptible>false</casualInterruptible>
+  </JobDef>
+
+  <JobDef>
     <defName>Wisk_Zoomies</defName>
     <driverClass>Wisk.JobDriver_Zoomies</driverClass>
     <reportString>correndo de felicidade (zoomies).</reportString>
