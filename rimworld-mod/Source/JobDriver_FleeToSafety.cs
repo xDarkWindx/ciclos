@@ -15,6 +15,13 @@ namespace Wisk
 
         protected override IEnumerable<Toil> MakeNewToils()
         {
+            // terminou a fuga (ou foi interrompida): não repetir sem novo dano
+            AddFinishAction(() =>
+            {
+                CompWisk c = pawn.TryGetComp<CompWisk>();
+                if (c != null) c.fleeRequested = false;
+            });
+
             yield return Toils_Goto.GotoCell(TargetIndex.A, PathEndMode.OnCell);
 
             Toil hide = new Toil();

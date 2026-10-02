@@ -72,7 +72,7 @@
       <thinkTreeMain>Wisk_AnimalMain</thinkTreeMain>
       <herdAnimal>false</herdAnimal>
       <baseBodySize>0.35</baseBodySize>
-      <baseHealthScale>0.6</baseHealthScale>
+      <baseHealthScale>1.0</baseHealthScale>
       <foodType>OmnivoreAnimal</foodType>
       <gestationPeriodDays>9</gestationPeriodDays>
       <wildness>0.1</wildness>

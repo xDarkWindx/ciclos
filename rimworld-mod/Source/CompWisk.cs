@@ -18,6 +18,7 @@ namespace Wisk
 
         // agilidade: esquiva de tiros (corpo a corpo é pelo stat MeleeDodgeChance)
         public float rangedDodgeChance = 0.9f;                       // 90% dos tiros "erram"
+        public float maxHitDamage = 8f;                              // nenhum golpe sozinho passa disso: sobra vida pra fugir
 
         // consequências de matar
         public int killerGoodwillPenalty = 40;                       // facção do assassino perde isso com as outras
@@ -63,6 +64,10 @@ namespace Wisk
                     MoteMaker.ThrowText(pawn.DrawPos, pawn.Map, "errou!", 1.5f);
                 return;
             }
+
+            // um golpe só não derruba: no máximo "de raspão"
+            if (dinfo.Amount > Props.maxHitDamage)
+                dinfo.SetAmount(Props.maxHitDamage);
         }
 
         // ---- morte: consequências ----
@@ -78,6 +83,8 @@ namespace Wisk
         {
             Pawn pawn = parent as Pawn;
             if (pawn == null || pawn.Dead || totalDamageDealt <= 0f) return;
+            if (!fleeRequested && pawn.Spawned)
+                MoteMaker.ThrowText(pawn.DrawPos, pawn.Map, "CHEGA DE GUERRA!", 2.5f);
             fleeRequested = true;
             lastDamageTick = Find.TickManager.TicksGame;
         }

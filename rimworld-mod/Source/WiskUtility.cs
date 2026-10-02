@@ -33,22 +33,22 @@ namespace Wisk
         public static bool ThreatNear(Pawn dog, float radius) =>
             MinThreatDist(dog.Position, Threats(dog)) < radius;
 
-        /// <summary>Refúgio: cama própria → cama do favorito (se longe das ameaças) → célula segura da home area.</summary>
+        /// <summary>Refúgio: cama do dono/vínculo → cama própria (se longe das ameaças) → célula segura da home area.</summary>
         public static IntVec3 FindRefuge(Pawn dog)
         {
             List<Pawn> threats = Threats(dog);
 
             var beds = new List<Building_Bed>();
-            Building_Bed own = dog.ownership?.OwnedBed;
-            if (own != null) beds.Add(own);
             Pawn fav = CompWisk.FindBondOrMaster(dog);
             Building_Bed favBed = fav?.ownership?.OwnedBed;
-            if (favBed != null) beds.Add(favBed);
+            if (favBed != null) beds.Add(favBed);          // 1º a cama do dono
+            Building_Bed own = dog.ownership?.OwnedBed;
+            if (own != null) beds.Add(own);                // 2º a cama dele
 
             foreach (Building_Bed bed in beds)
             {
                 if (bed.Destroyed || !bed.Spawned || bed.Map != dog.Map || bed.IsForbidden(dog)) continue;
-                if (MinThreatDist(bed.Position, threats) < 8f) continue;
+                if (MinThreatDist(bed.Position, threats) < 5f) continue;
                 if (!dog.CanReach(bed, PathEndMode.OnCell, Danger.Deadly)) continue;
                 return bed.Position;
             }

@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Defs>
 
-  <!-- Árvore de pensamento: fugir se levou dano > zoomies > seguir o favorito > árvore normal de animais -->
+  <!-- Árvore de pensamento: fugir se levou dano > zoomies evasivos (ameaça por perto) > zoomies > seguir o favorito > árvore normal de animais -->
   <ThinkTreeDef>
     <defName>Wisk_AnimalMain</defName>
     <thinkRoot Class="ThinkNode_Priority">
       <subNodes>
         <li Class="Wisk.JobGiver_FleeToSafety" />
+        <li Class="Wisk.JobGiver_EvasiveZoomies" />
         <li Class="Wisk.JobGiver_Zoomies" />
         <li Class="Wisk.JobGiver_FollowFavorite" />
         <li Class="ThinkNode_Subtree">
@@ -27,6 +28,13 @@
     <defName>Wisk_FleeToSafety</defName>
     <driverClass>Wisk.JobDriver_FleeToSafety</driverClass>
     <reportString>fugindo para um lugar seguro.</reportString>
+    <casualInterruptible>false</casualInterruptible>
+  </JobDef>
+
+  <JobDef>
+    <defName>Wisk_EvasiveZoomies</defName>
+    <driverClass>Wisk.JobDriver_EvasiveZoomies</driverClass>
+    <reportString>fazendo zoomies para distrair o inimigo.</reportString>
     <casualInterruptible>false</casualInterruptible>
   </JobDef>
 
