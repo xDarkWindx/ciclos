@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using RimWorld;
+using UnityEngine;
 using Verse;
 using Verse.AI;
 
@@ -18,6 +20,7 @@ namespace Wisk
 
         // agilidade: esquiva de tiros (corpo a corpo é pelo stat MeleeDodgeChance)
         public float rangedDodgeChance = 0.9f;                       // 90% dos tiros "erram"
+        public float tauntPreference = 0.5f;                         // chance de o inimigo provocado escolher o Wisk como alvo a cada reavaliação
         public float maxHitDamage = 8f;                              // nenhum golpe sozinho passa disso: sobra vida pra fugir
 
         // consequências de matar
@@ -87,6 +90,57 @@ namespace Wisk
                 MoteMaker.ThrowText(pawn.DrawPos, pawn.Map, "CHEGA DE GUERRA!", 2.5f);
             fleeRequested = true;
             lastDamageTick = Find.TickManager.TicksGame;
+        }
+
+        // ---- botão: selecionar o Wisk → Provocar → clicar no inimigo ----
+        private static Texture2D tauntIcon;
+
+        public override IEnumerable<Gizmo> CompGetGizmosExtra()
+        {
+            Pawn pawn = parent as Pawn;
+            if (pawn == null || pawn.Faction != Faction.OfPlayer || !pawn.Spawned || pawn.Dead) yield break;
+            if (tauntIcon == null)
+                tauntIcon = ContentFinder<Texture2D>.Get("Things/Pawn/Animal/Papillon/Papillon_south", false) ?? BaseContent.BadTex;
+
+            if (pawn.CurJobDef == WiskDefOf.Wisk_TauntOrbit)
+            {
+                yield return new Command_Action
+                {
+                    defaultLabel = "Parar provocação",
+                    defaultDesc = "O Wisk para de provocar e volta ao normal.",
+                    icon = tauntIcon,
+                    action = () => pawn.jobs.EndCurrentJob(JobCondition.InterruptForced)
+                };
+                yield break;
+            }
+
+            var cmd = new Command_Action
+            {
+                defaultLabel = "Provocar...",
+                defaultDesc = "Escolha um inimigo: o Wisk corre em volta dele e o inimigo tende a preferi-lo como alvo. Termina se o Wisk for ferido, se o inimigo cair ou depois de 1 minuto.",
+                icon = tauntIcon,
+                action = () => Find.Targeter.BeginTargeting(TauntTargeting(pawn), t =>
+                {
+                    if (t.Thing is Pawn enemy) WiskTaunt.Start(enemy, pawn);
+                })
+            };
+            if (!TauntRegistry.IsWiskUsable(pawn) || pawn.health.summaryHealth.SummaryHealthPercent < 0.9f)
+                cmd.Disable("O Wisk está ferido ou fugindo.");
+            else if (!pawn.DevelopmentalStage.Adult())
+                cmd.Disable("O Wisk é novo demais.");
+            yield return cmd;
+        }
+
+        private static TargetingParameters TauntTargeting(Pawn wisk)
+        {
+            return new TargetingParameters
+            {
+                canTargetPawns = true,
+                canTargetBuildings = false,
+                canTargetItems = false,
+                validator = t => t.Thing is Pawn p && p.Spawned && !p.Dead && !p.Downed
+                    && !p.IsPrisonerOfColony && p.HostileTo(Faction.OfPlayer)
+            };
         }
 
         public override void CompTick() => DoTick();
