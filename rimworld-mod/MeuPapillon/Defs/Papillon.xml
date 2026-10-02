@@ -9,6 +9,7 @@
       <MoveSpeed>4.2</MoveSpeed>
       <ComfyTemperatureMin>-25</ComfyTemperatureMin>
       <MarketValue>180</MarketValue>
+      <MeleeDodgeChance>0.9</MeleeDodgeChance>
       <FilthRate>2</FilthRate>
     </statBases>
     <tools>
@@ -79,7 +80,7 @@
       <nuzzleMtbHours>12</nuzzleMtbHours>
       <manhunterOnTameFailChance>0</manhunterOnTameFailChance>
       <manhunterOnDamageChance>0.02</manhunterOnDamageChance>
-      <trainability>Advanced</trainability>
+      <trainability>Intermediate</trainability>
       <nameOnTameChance>1</nameOnTameChance>
       <packAnimal>false</packAnimal>
       <lifeExpectancy>14</lifeExpectancy>

@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Defs>
 
-  <!-- Árvore de pensamento: primeiro tenta seguir o favorito, senão cai na árvore normal de animais -->
+  <!-- Árvore de pensamento: fugir se levou dano > zoomies > seguir o favorito > árvore normal de animais -->
   <ThinkTreeDef>
     <defName>Wisk_AnimalMain</defName>
     <thinkRoot Class="ThinkNode_Priority">
       <subNodes>
+        <li Class="Wisk.JobGiver_FleeToSafety" />
+        <li Class="Wisk.JobGiver_Zoomies" />
         <li Class="Wisk.JobGiver_FollowFavorite" />
         <li Class="ThinkNode_Subtree">
           <treeDef>Animal</treeDef>
@@ -18,6 +20,20 @@
     <defName>Wisk_FollowFavorite</defName>
     <driverClass>Wisk.JobDriver_FollowFavorite</driverClass>
     <reportString>seguindo TargetA.</reportString>
+    <casualInterruptible>true</casualInterruptible>
+  </JobDef>
+
+  <JobDef>
+    <defName>Wisk_FleeToSafety</defName>
+    <driverClass>Wisk.JobDriver_FleeToSafety</driverClass>
+    <reportString>fugindo para um lugar seguro.</reportString>
+    <casualInterruptible>false</casualInterruptible>
+  </JobDef>
+
+  <JobDef>
+    <defName>Wisk_Zoomies</defName>
+    <driverClass>Wisk.JobDriver_Zoomies</driverClass>
+    <reportString>correndo de felicidade (zoomies).</reportString>
     <casualInterruptible>true</casualInterruptible>
   </JobDef>
 
@@ -58,6 +74,19 @@
         <label>brincou com o cachorro</label>
         <description>Brincar com o cachorro melhorou meu dia.</description>
         <baseMoodEffect>3</baseMoodEffect>
+      </li>
+    </stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>Wisk_WatchedZoomies</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages>
+      <li>
+        <label>viu o cachorro correndo feliz</label>
+        <description>Ver o cachorro correndo doido de alegria é impossível de não achar fofo.</description>
+        <baseMoodEffect>2</baseMoodEffect>
       </li>
     </stages>
   </ThoughtDef>

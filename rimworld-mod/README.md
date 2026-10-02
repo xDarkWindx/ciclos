@@ -5,6 +5,10 @@ Cachorro Papillon preto e branco como animal domesticável, com comportamento pr
 ## Comportamento
 - **Segue o favorito:** quando ocioso, o Wisk segue por ~1,5–3h de jogo o pawn favorito (vínculo → dono → colono mais próximo), só se os dois estiverem na **home area**. Não segue se estiver com fome/cansado, e depois descansa um cooldown.
 - **Recreação:** colonos podem escolher "brincar com o Wisk" quando buscam lazer (tipo de lazer próprio, com tolerância). Dá o pensamento +3 de humor por ~0,6 dia.
+- **Zoomies:** de vez em quando (e com 35% de chance depois de brincarem com ele) sai correndo em sprint pela home area por 15–30 s, soltando poeira. Colonos que veem ganham +2 de humor. Só acontece descansado, alimentado e sem inimigos por perto.
+- **Difícil de acertar:** corpo a corpo via stat `MeleeDodgeChance` = 0,9; tiros: 90% são absorvidos (aparece "errou!"). Explosões e fogo não são esquivados.
+- **Foge ao tomar dano:** qualquer dano que passar faz ele correr (sprint) para a cama dele → cama do dono/vínculo (se estiver a ≥8 células de inimigos) → célula segura da home area (longe de inimigos e de preferência coberta). Fica escondido até 15 s sem dano e sem inimigo a <20 células.
+- **Não carrega coisas:** `trainability` Intermediate (sem treinar Haul) e `packAnimal` falso.
 - Ajustes (chance, duração, cooldown) em `Comps` do `Papillon` via `CompProperties_Wisk`.
 
 ## Instalar

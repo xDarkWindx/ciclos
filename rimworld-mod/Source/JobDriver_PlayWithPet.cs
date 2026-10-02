@@ -43,8 +43,17 @@ namespace Wisk
             {
                 if (Dog != null && Dog.CurJobDef == JobDefOf.Wait)
                     Dog.jobs.EndCurrentJob(JobCondition.Succeeded);
-                if (pawn.needs?.mood != null && ticksSpent())
-                    pawn.needs.mood.thoughts.memories.TryGainMemory(WiskDefOf.Wisk_PlayedWithPet, Dog);
+                if (ticksSpent())
+                {
+                    if (pawn.needs?.mood != null)
+                        pawn.needs.mood.thoughts.memories.TryGainMemory(WiskDefOf.Wisk_PlayedWithPet, Dog);
+                    CompWisk comp = Dog?.TryGetComp<CompWisk>();
+                    if (comp != null && Rand.Chance(0.35f))
+                    {
+                        comp.zoomiesTrigger = true;
+                        comp.nextZoomiesTick = Find.TickManager.TicksGame + 120;
+                    }
+                }
             });
             yield return play;
         }
