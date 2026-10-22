@@ -35,14 +35,14 @@ export default function Dashboard() {
   const extraTotals = totalsBySubject(extraSessions, since);
 
   if (everything.length === 0 && progress.length === 0) {
-    return (<><h2>Dashboard</h2><Empty>Os gráficos aparecem assim que você registrar o primeiro estudo.</Empty></>);
+    return (<><h2>Painel</h2><Empty>Os gráficos aparecem assim que você registrar o primeiro estudo.</Empty></>);
   }
 
   const pctToday = goalSec ? Math.min(100, (todaySec / goalSec) * 100) : 0;
 
   return (
     <>
-      <h2>Dashboard</h2>
+      <h2>Painel</h2>
       <div className="tiles">
         <div className="tile">
           <span className="muted">Hoje</span>

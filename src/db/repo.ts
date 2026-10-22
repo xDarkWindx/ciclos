@@ -138,15 +138,21 @@ export function listSteps(cycleId: string): Step[] {
 
 const clampBlocks = (n: number) => Math.min(50, Math.max(1, Math.round(n) || 1));
 
-/** Adiciona `blocks` etapas (blocos) da matéria ao final do ciclo, cada uma com `targetMin` minutos. */
-export function addStep(cycleId: string, subjectId: string, targetMin: number, blocks = 1) {
+/** Insere, ao final do ciclo, `blocks` etapas de cada matéria (na ordem dada), com `targetMin` minutos cada. */
+function appendSteps(cycleId: string, subjectIds: string[], targetMin: number, blocks: number) {
   let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
   const t = now();
-  for (let i = 0; i < clampBlocks(blocks); i++) {
-    run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, ++pos, Math.max(1, targetMin), t]);
+  for (const subjectId of subjectIds) {
+    for (let i = 0; i < clampBlocks(blocks); i++) {
+      run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, ++pos, Math.max(1, targetMin), t]);
+    }
   }
-  markDirty();
+  if (subjectIds.length) markDirty();
 }
+
+/** Adiciona `blocks` etapas (blocos) da matéria ao final do ciclo, cada uma com `targetMin` minutos. */
+export const addStep = (cycleId: string, subjectId: string, targetMin: number, blocks = 1) =>
+  appendSteps(cycleId, [subjectId], targetMin, blocks);
 
 export function updateStep(id: string, subjectId: string, targetMin: number) {
   run('UPDATE cycle_steps SET subject_id=?,target_min=?,updated_at=? WHERE id=?', [subjectId, Math.max(1, targetMin), now(), id]);
@@ -191,14 +197,7 @@ export function addMissingSubjects(cycleId: string, targetMin: number, blocks = 
   const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
   // Ordem de cadastro (rowid), não alfabética: normalmente reflete a ordem do edital.
   const missing = all<Subject>('SELECT id,name,color,category,note,extra FROM subjects WHERE deleted=0 AND extra=0 ORDER BY rowid').filter((s) => !present.has(s.id));
-  let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
-  const t = now();
-  for (const s of missing) {
-    for (let i = 0; i < clampBlocks(blocks); i++) {
-      run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, s.id, ++pos, Math.max(1, targetMin), t]);
-    }
-  }
-  if (missing.length) markDirty();
+  appendSteps(cycleId, missing.map((s) => s.id), targetMin, blocks);
   return missing.length;
 }
 
@@ -307,6 +306,10 @@ export function updateSession(id: string, startedAt: number, endedAt: number, se
   markDirty();
 }
 
+/** Segundos estudados numa matéria desde `sinceMs`. */
+export const subjectSecondsSince = (subjectId: string, sinceMs: number) =>
+  one<{ s: number | null }>('SELECT SUM(seconds) s FROM sessions WHERE subject_id=? AND started_at>=? AND deleted=0', [subjectId, sinceMs])?.s ?? 0;
+
 /** Intervalos (início–fim) estudados em cada etapa da volta, em ordem cronológica. */
 export function runSessionTimes(runId: string): Map<string, { start: number; end: number }[]> {
   const m = new Map<string, { start: number; end: number }[]>();
@@ -318,7 +321,3 @@ export function runSessionTimes(runId: string): Map<string, { start: number; end
   return m;
 }
 
-export function updateSessionNote(id: string, note: string) {
-  run('UPDATE sessions SET note=?,updated_at=? WHERE id=?', [note || null, now(), id]);
-  markDirty();
-}

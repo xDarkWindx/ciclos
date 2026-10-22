@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
-import { closeRunIfComplete, ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, listExtraSubjects, listSessions, runProgress, runSessionTimes, setActiveCycle, updateSubjectNote } from '../db/repo';
+import { closeRunIfComplete, ensureRun, getActiveCycle, getCurrentRun, getSubject, listCycles, listExtraSubjects, runProgress, subjectSecondsSince, runSessionTimes, setActiveCycle, updateSubjectNote } from '../db/repo';
 import { useVersion } from '../db/store';
 import { cancelTimer, startFree, startStep, stopAndSave, togglePause, useNow, useTimerState } from '../core/controller';
-import { displaySeconds, finishAt, formatClock, formatDuration, isFree, isRunning } from '../core/timer';
+import { displaySeconds, finishAt, formatClock, formatDuration, isFree, isRunning, type TimerState } from '../core/timer';
 import { Dot, Empty, fmtRange, fmtTime, Modal } from './common';
 
 export default function Study({ goTo }: { goTo: (t: string) => void }) {
   useVersion();
   const timer = useTimerState();
-  const now = useNow(!!timer && isRunning(timer));
   const cycle = getActiveCycle();
   const run = cycle ? getCurrentRun(cycle.id) : undefined;
   const steps = cycle && run ? runProgress(cycle.id, run.id) : [];
   const times = run ? runSessionTimes(run.id) : new Map<string, { start: number; end: number }[]>();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [noteFor, setNoteFor] = useState<{ id: string; name: string } | null>(null);
+  const [hideDone, setHideDone] = useState(() => localStorage.getItem('ciclos.hideDone') === '1');
+  const toggleHideDone = () => {
+    localStorage.setItem('ciclos.hideDone', hideDone ? '0' : '1');
+    setHideDone(!hideDone);
+  };
 
   const allDone = steps.length > 0 && steps.every((s) => s.done);
   useEffect(() => {
@@ -28,6 +32,8 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   const pctAll = total ? (done / total) * 100 : 0;
   const next = steps.find((s) => !s.done);
   const nextId = next?.id;
+  const doneCount = steps.filter((s) => s.done).length;
+  const visibleSteps = hideDone ? steps.filter((s) => !s.done) : steps;
 
   return (
     <>
@@ -40,6 +46,11 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
             <span className="muted">{formatDuration(done)} de {formatDuration(total)}</span>
           </div>
           <Bar pct={pctAll} />
+          {doneCount > 0 && (
+            <button className="plain link tiny" onClick={toggleHideDone}>
+              {hideDone ? `Mostrar ${doneCount} concluída${doneCount > 1 ? 's' : ''}` : `Ocultar ${doneCount} concluída${doneCount > 1 ? 's' : ''}`}
+            </button>
+          )}
         </div>
       )}
 
@@ -50,26 +61,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
         </button>
       )}
 
-      {timer && (
-        <div className="card timer" style={{ borderColor: timer.color }}>
-          <div className="row center muted"><Dot color={timer.color} /> {timer.subjectName}{!timer.stepId && ' · avulso'}</div>
-          {getSubject(timer.subjectId)?.note && <div className="note-box">📝 {getSubject(timer.subjectId)!.note}</div>}
-          <div className="clock" aria-live="off">{formatClock(displaySeconds(timer, now))}</div>
-          <div className="muted center">
-            {isFree(timer) ? 'Livre (sem limite)' : `${timer.mode === 'regressive' ? 'Regressivo' : 'Progressivo'} · meta ${formatDuration(timer.targetSec)}`}
-            {!isRunning(timer) && ' · em pausa'}
-          </div>
-          <div className="tiny muted center">
-            início {fmtTime(timer.sessionStartedAt)}
-            {isRunning(timer) && finishAt(timer) !== null ? ` · término previsto ${fmtTime(finishAt(timer)!)}` : ''}
-          </div>
-          <div className="row center gap">
-            <button className="btn primary big" onClick={togglePause}>{isRunning(timer) ? '⏸ Pausar' : '▶ Continuar'}</button>
-            <button className="btn" onClick={stopAndSave}>⏹ Parar e salvar</button>
-            <button className="btn danger" onClick={() => setConfirmCancel(true)}>✕ Cancelar</button>
-          </div>
-        </div>
-      )}
+      {timer && <TimerCard timer={timer} onCancel={() => setConfirmCancel(true)} />}
 
       {!cycle && (
         <Empty>
@@ -86,7 +78,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
 
       {steps.length > 0 && (
       <ul className="list">
-        {steps.map((s) => {
+        {visibleSteps.map((s) => {
           const pct = Math.min(100, (s.doneSec / s.targetSec) * 100);
           const active = timer?.stepId === s.id;
           return (
@@ -136,6 +128,32 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
   );
 }
 
+/** Cartão do cronômetro em andamento. Só ele redesenha a cada tick (não a tela inteira). */
+function TimerCard({ timer, onCancel }: { timer: TimerState; onCancel: () => void }) {
+  const now = useNow(isRunning(timer));
+  const note = getSubject(timer.subjectId)?.note;
+  return (
+    <div className="card timer" style={{ borderColor: timer.color }}>
+      <div className="row center muted"><Dot color={timer.color} /> {timer.subjectName}{!timer.stepId && ' · avulso'}</div>
+      {note && <div className="note-box">📝 {note}</div>}
+      <div className="clock" aria-live="off">{formatClock(displaySeconds(timer, now))}</div>
+      <div className="muted center">
+        {isFree(timer) ? 'Livre (sem limite)' : `${timer.mode === 'regressive' ? 'Regressivo' : 'Progressivo'} · meta ${formatDuration(timer.targetSec)}`}
+        {!isRunning(timer) && ' · em pausa'}
+      </div>
+      <div className="tiny muted center">
+        início {fmtTime(timer.sessionStartedAt)}
+        {isRunning(timer) && finishAt(timer) !== null ? ` · término previsto ${fmtTime(finishAt(timer)!)}` : ''}
+      </div>
+      <div className="row center gap">
+        <button className="btn primary big" onClick={togglePause}>{isRunning(timer) ? '⏸ Pausar' : '▶ Continuar'}</button>
+        <button className="btn" onClick={stopAndSave}>⏹ Parar e salvar</button>
+        <button className="btn danger" onClick={onCancel}>✕ Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 /** Estudo avulso: matérias fora dos ciclos (ex.: japonês, guitarra), só para controle de tempo. */
 function FreeStudy({ disabled, goTo, onNote }: { disabled: boolean; goTo: (t: string) => void; onNote: (n: { id: string; name: string }) => void }) {
   const extras = listExtraSubjects();
@@ -144,7 +162,7 @@ function FreeStudy({ disabled, goTo, onNote }: { disabled: boolean; goTo: (t: st
   const [free, setFree] = useState(false);
   const subject = extras.find((s) => s.id === subjectId) ?? extras[0];
   const weekAgo = Date.now() - 7 * 86_400_000;
-  const week = subject ? listSessions().filter((x) => x.subjectId === subject.id && x.startedAt >= weekAgo).reduce((a, x) => a + x.seconds, 0) : 0;
+  const week = subject ? subjectSecondsSince(subject.id, weekAgo) : 0;
 
   return (
     <>
