@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { getTimerMode, saveSession, type StepProgress } from '../db/repo';
+import { getTimerMode, saveSession, type StepProgress, type Subject } from '../db/repo';
 import { one, run, schedulePersist } from '../db/sqlite';
 import { cancelFinishNotification, clearDeliveredAlarm, keepAwake, requestNotifyPermission, scheduleFinishNotification, startAlarm, stopAlarm, unlockAudio, webNotify } from './alarm';
 import { finishAt, isFinished, pause, resume, secondsToSave, type TimerState } from './timer';
@@ -74,7 +74,27 @@ export function startStep(step: StepProgress, runId: string) {
   };
   finished = null;
   set(next);
-  void scheduleFinishNotification(finishAt(next)!, next.subjectName);
+  scheduleIfTimed(next);
+}
+
+/** Estudo avulso: fora do ciclo. `minutes` 0 = livre (conta para cima, sem alarme). */
+export function startFree(subject: Subject, minutes: number) {
+  if (state) return;
+  unlockAudio();
+  if (minutes > 0) void requestNotifyPermission();
+  const t = Date.now();
+  const next: TimerState = {
+    stepId: null, runId: null, cycleId: null, subjectId: subject.id, subjectName: subject.name, color: subject.color,
+    targetSec: Math.max(0, Math.round(minutes * 60)), mode: getTimerMode(), accMs: 0, startedAtMs: t, sessionStartedAt: t,
+  };
+  finished = null;
+  set(next);
+  scheduleIfTimed(next);
+}
+
+function scheduleIfTimed(t: TimerState) {
+  const at = finishAt(t);
+  if (at !== null) void scheduleFinishNotification(at, t.subjectName);
 }
 
 export function togglePause() {
@@ -87,7 +107,7 @@ export function togglePause() {
   } else {
     const next = resume(state, t);
     set(next);
-    void scheduleFinishNotification(finishAt(next)!, next.subjectName);
+    scheduleIfTimed(next);
   }
 }
 

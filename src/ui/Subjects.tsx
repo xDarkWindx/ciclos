@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addSubject, deleteSubject, listCategories, listSubjects, updateSubject, updateSubjectCategory, updateSubjectNote, type Subject } from '../db/repo';
+import { addSubject, deleteSubject, listCategories, listSubjects, setSubjectExtra, subjectStepCount, updateSubject, updateSubjectCategory, updateSubjectNote, type Subject } from '../db/repo';
 import { useVersion } from '../db/store';
 import { Empty, Modal } from './common';
 
@@ -9,11 +9,12 @@ export default function Subjects() {
   const categories = listCategories();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [extra, setExtra] = useState(false);
   const [del, setDel] = useState<Subject | null>(null);
 
   const add = () => {
     if (!name.trim()) return;
-    addSubject(name, undefined, category);
+    addSubject(name, undefined, category, extra);
     setName(''); // mantém a classificação: normalmente se cadastram várias da mesma área em sequência
   };
 
@@ -25,7 +26,9 @@ export default function Subjects() {
         <input className="input grow wide" placeholder="Nova matéria (ex.: Direito Penal)" value={name} onChange={(e) => setName(e.target.value)} />
         <input className="input cat" list="categories" placeholder="Classificação" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Classificação da nova matéria" />
         <button className="btn primary" type="submit">Adicionar</button>
+        <label className="row gap small"><input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} /> Avulsa (fora do concurso)</label>
       </form>
+      <p className="tiny muted">Matérias <strong>avulsas</strong> (ex.: japonês, guitarra) ficam fora dos ciclos e das metas; o tempo delas aparece separado no Painel.</p>
       {subjects.length === 0 && <Empty>Cadastre as matérias do seu edital. Depois monte o ciclo na aba “Ciclos”.</Empty>}
       <ul className="list">
         {subjects.map((s) => (
@@ -41,6 +44,18 @@ export default function Subjects() {
               />
               <button className="btn danger" onClick={() => setDel(s)} aria-label={`Remover ${s.name}`}>🗑</button>
             </div>
+            <label className="row gap small muted">
+              <input
+                type="checkbox"
+                checked={!!s.extra}
+                onChange={(e) => {
+                  const n = e.target.checked ? subjectStepCount(s.id) : 0;
+                  if (n && !confirm(`“${s.name}” está em ${n} etapa(s) de ciclo. Como avulsa, ela sai dos ciclos (o histórico é mantido). Continuar?`)) return;
+                  setSubjectExtra(s.id, e.target.checked);
+                }}
+              />
+              Avulsa (fora dos ciclos e das metas)
+            </label>
             <div className="row gap wrap">
               <input
                 className="input cat"

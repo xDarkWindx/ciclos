@@ -11,7 +11,10 @@ const DAY = 86_400_000;
 export default function Dashboard() {
   useVersion();
   const [period, setPeriod] = useState<7 | 30 | 0>(30);
-  const sessions = listSessions();
+  const everything = listSessions();
+  // Metas, sequência e gráficos são do concurso; matérias avulsas aparecem num quadro separado.
+  const sessions = everything.filter((s) => !s.extra);
+  const extraSessions = everything.filter((s) => s.extra);
   const goalSec = getDailyGoalMin() * 60;
   const today = Date.now();
   const days = lastDays(sessions, 14, today);
@@ -29,7 +32,9 @@ export default function Dashboard() {
   const catTotals = totalsByCategory(sessions, since);
   const catSum = catTotals.reduce((a, c) => a + c.seconds, 0) || 1;
 
-  if (sessions.length === 0 && progress.length === 0) {
+  const extraTotals = totalsBySubject(extraSessions, since);
+
+  if (everything.length === 0 && progress.length === 0) {
     return (<><h2>Dashboard</h2><Empty>Os gráficos aparecem assim que você registrar o primeiro estudo.</Empty></>);
   }
 
@@ -95,6 +100,19 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+      {extraTotals.length > 0 && (
+        <>
+          <h3>Estudos avulsos <span className="tiny muted">(fora das metas)</span></h3>
+          <div className="card">
+            {extraTotals.map((t) => (
+              <div key={t.subjectId} className="row between hrow">
+                <span><Dot color={t.color} /> {t.name}</span>
+                <strong>{formatDuration(t.seconds)}</strong>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

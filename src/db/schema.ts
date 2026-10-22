@@ -3,7 +3,7 @@ import type { Database } from 'sql.js';
 // Tabelas sincronizadas: todas têm id (TEXT), updated_at (ms) e deleted (tombstone).
 export const SYNCED_TABLES = ['subjects', 'cycles', 'cycle_steps', 'runs', 'sessions'] as const;
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function migrate(db: Database) {
   db.run(`
@@ -40,6 +40,8 @@ export function migrate(db: Database) {
   const cols = (db.exec('PRAGMA table_info(subjects)')[0]?.values ?? []).map((r) => r[1]);
   if (!cols.includes('category')) db.run("ALTER TABLE subjects ADD COLUMN category TEXT NOT NULL DEFAULT ''");
   if (!cols.includes('note')) db.run("ALTER TABLE subjects ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+  // v4: matéria avulsa (fora dos ciclos e das metas do concurso; ex.: japonês, guitarra).
+  if (!cols.includes('extra')) db.run('ALTER TABLE subjects ADD COLUMN extra INTEGER NOT NULL DEFAULT 0');
   // v3: horário de término da sessão (com pausas, fim ≠ início + tempo estudado). Nulo em sessões antigas.
   const scols = (db.exec('PRAGMA table_info(sessions)')[0]?.values ?? []).map((r) => r[1]);
   if (!scols.includes('ended_at')) db.run('ALTER TABLE sessions ADD COLUMN ended_at INTEGER');

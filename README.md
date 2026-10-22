@@ -16,6 +16,8 @@ App (web/PWA + Android) para controlar o **ciclo de estudos** de concursos: mat�
 - **Classificação por matéria** (Direito, Exatas, TI… ou qualquer uma que você digitar): o dashboard mostra o tempo por classificação, o editor do ciclo mostra o total por classificação, e o **embaralhar** evita duas etapas seguidas da mesma classificação.
 - **Onde parei:** anotação por matéria (página, exercício…), visível na tela de estudo e editável ao encerrar uma sessão.
 - **Embaralhar** o ciclo deixando as repetições da mesma matéria o mais distantes possível (ciclo tratado como circular).
+- **Matérias avulsas** (ex.: japonês, guitarra): fora dos ciclos e das metas do concurso, com cronômetro próprio (com tempo e alarme, ou livre) e tempo mostrado à parte no Painel.
+- **Horários:** cada sessão guarda início e fim (visíveis nas etapas e no histórico, editáveis no histórico).
 - O cronômetro sobrevive a recarregar a página/fechar o app (é calculado por timestamps).
 - Extras além do pedido: meta diária, sequência, anotação ao fim da sessão, registro manual, CSV, modo escuro, tela ligada durante o estudo.
 

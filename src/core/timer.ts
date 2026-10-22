@@ -2,13 +2,14 @@ import type { TimerMode } from '../db/repo';
 
 /** Estado do cronômetro. Calculado a partir de timestamps, então sobrevive a reload/segundo plano. */
 export interface TimerState {
-  stepId: string;
-  runId: string;
-  cycleId: string;
+  // nulos no estudo avulso (fora do ciclo)
+  stepId: string | null;
+  runId: string | null;
+  cycleId: string | null;
   subjectId: string;
   subjectName: string;
   color: string;
-  targetSec: number; // tempo a estudar nesta sessão (o que falta da etapa)
+  targetSec: number; // tempo a estudar nesta sessão (o que falta da etapa); 0 = livre, sem limite nem alarme
   mode: TimerMode;
   accMs: number; // tempo acumulado até a última pausa
   startedAtMs: number | null; // quando retomou (null = pausado)
@@ -19,11 +20,14 @@ export const elapsedMs = (t: TimerState, now: number) => t.accMs + (t.startedAtM
 
 export const isRunning = (t: TimerState) => t.startedAtMs !== null;
 
-export const isFinished = (t: TimerState, now: number) => elapsedMs(t, now) >= t.targetSec * 1000;
+export const isFree = (t: TimerState) => t.targetSec <= 0;
 
-/** Segundos exibidos: regressivo conta até 0, progressivo conta de 0 até a meta. */
+export const isFinished = (t: TimerState, now: number) => !isFree(t) && elapsedMs(t, now) >= t.targetSec * 1000;
+
+/** Segundos exibidos: regressivo conta até 0, progressivo conta de 0 até a meta; livre só conta para cima. */
 export function displaySeconds(t: TimerState, now: number): number {
   const e = elapsedMs(t, now);
+  if (isFree(t)) return Math.floor(e / 1000);
   const capped = Math.min(e, t.targetSec * 1000);
   return t.mode === 'regressive' ? Math.ceil((t.targetSec * 1000 - capped) / 1000) : Math.floor(capped / 1000);
 }
@@ -36,11 +40,11 @@ export const resume = (t: TimerState, now: number): TimerState =>
 
 /** Momento (ms epoch) em que o cronômetro em execução atinge a meta. */
 export const finishAt = (t: TimerState): number | null =>
-  t.startedAtMs ? t.startedAtMs + (t.targetSec * 1000 - t.accMs) : null;
+  t.startedAtMs && !isFree(t) ? t.startedAtMs + (t.targetSec * 1000 - t.accMs) : null;
 
-/** Segundos a registrar ao encerrar: nunca passa da meta. */
+/** Segundos a registrar ao encerrar: nunca passa da meta (no modo livre, tudo o que contou). */
 export const secondsToSave = (t: TimerState, now: number) =>
-  Math.floor(Math.min(elapsedMs(t, now), t.targetSec * 1000) / 1000);
+  Math.floor((isFree(t) ? elapsedMs(t, now) : Math.min(elapsedMs(t, now), t.targetSec * 1000)) / 1000);
 
 export function formatClock(sec: number): string {
   const h = Math.floor(sec / 3600);
