@@ -48,3 +48,15 @@ describe('stats', () => {
     expect(d.map((x) => x.seconds)).toEqual([0, 0, 60]);
   });
 });
+
+describe('cronômetro livre (estudo avulso sem limite)', () => {
+  const free: TimerState = { ...base, stepId: null, runId: null, cycleId: null, targetSec: 0 };
+  it('conta para cima, nunca termina e registra tudo', () => {
+    const later = 1000 + 2 * 3600_000;
+    expect(isFinished(free, later)).toBe(false);
+    expect(displaySeconds(free, later)).toBe(7200);
+    expect(displaySeconds({ ...free, mode: 'regressive' }, later)).toBe(7200);
+    expect(secondsToSave(free, later)).toBe(7200);
+    expect(finishAt(free)).toBeNull();
+  });
+});

@@ -47,7 +47,7 @@ export default function History() {
               <li key={r.id} className="row gap" style={{ borderLeft: `4px solid ${r.color}` }}>
                 <button className="plain grow" onClick={() => setEditing(r)} aria-label={`Editar registro de ${r.subjectName}`}>
                   <div><strong>{r.subjectName}</strong></div>
-                  <div className="tiny muted">{fmtRange(r.startedAt, r.endedAt)}{r.kind === 'manual' && ' · manual'}</div>
+                  <div className="tiny muted">{fmtRange(r.startedAt, r.endedAt)}{r.kind === 'manual' && ' · manual'}{!!r.extra && ' · avulsa'}</div>
                   {r.note && <div className="muted note">{r.note}</div>}
                 </button>
                 <strong>{formatDuration(r.seconds)}</strong>

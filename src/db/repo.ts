@@ -7,11 +7,29 @@ export const uid = () => crypto.randomUUID();
 const now = () => Date.now();
 
 // ---------- Matérias ----------
-export interface Subject { id: string; name: string; color: string; category: string; note: string }
+export interface Subject { id: string; name: string; color: string; category: string; note: string; extra: number }
 
 
 export const listSubjects = () =>
-  all<Subject>('SELECT id,name,color,category,note FROM subjects WHERE deleted=0 ORDER BY name COLLATE NOCASE');
+  all<Subject>('SELECT id,name,color,category,note,extra FROM subjects WHERE deleted=0 ORDER BY name COLLATE NOCASE');
+
+/** Quantas etapas (em todos os ciclos) usam a matéria. */
+export const subjectStepCount = (id: string) =>
+  one<{ n: number }>('SELECT COUNT(*) n FROM cycle_steps WHERE subject_id=? AND deleted=0', [id])?.n ?? 0;
+
+/** Matérias que podem entrar em ciclos (exclui as avulsas). */
+export const listCycleSubjects = () => listSubjects().filter((s) => !s.extra);
+
+/** Matérias avulsas: só controle de tempo, fora dos ciclos e das metas. */
+export const listExtraSubjects = () => listSubjects().filter((s) => s.extra);
+
+/** Marca/desmarca como avulsa. Ao virar avulsa, sai das etapas de todos os ciclos. */
+export function setSubjectExtra(id: string, extra: boolean) {
+  const t = now();
+  run('UPDATE subjects SET extra=?,updated_at=? WHERE id=?', [extra ? 1 : 0, t, id]);
+  if (extra) run('UPDATE cycle_steps SET deleted=1,updated_at=? WHERE subject_id=? AND deleted=0', [t, id]);
+  markDirty();
+}
 
 /** Sugestões + classificações já usadas (sem repetir, ordenadas). */
 export function listCategories(): string[] {
@@ -21,7 +39,7 @@ export function listCategories(): string[] {
 }
 
 export const getSubject = (id: string) =>
-  one<Subject>('SELECT id,name,color,category,note FROM subjects WHERE id=?', [id]);
+  one<Subject>('SELECT id,name,color,category,note,extra FROM subjects WHERE id=?', [id]);
 
 export function updateSubjectCategory(id: string, category: string) {
   run('UPDATE subjects SET category=?,updated_at=? WHERE id=?', [category.trim(), now(), id]);
@@ -34,11 +52,11 @@ export function updateSubjectNote(id: string, note: string) {
   markDirty();
 }
 
-export function addSubject(name: string, color?: string, category = ''): string {
+export function addSubject(name: string, color?: string, category = '', extra = false): string {
   const id = uid();
   // Sem cor informada, escolhe a mais distante das já usadas pelas outras matérias.
   const chosen = color ?? pickDistinctColor(listSubjects().map((s) => s.color));
-  run('INSERT INTO subjects(id,name,color,category,updated_at) VALUES(?,?,?,?,?)', [id, name.trim(), chosen, category.trim(), now()]);
+  run('INSERT INTO subjects(id,name,color,category,extra,updated_at) VALUES(?,?,?,?,?,?)', [id, name.trim(), chosen, category.trim(), extra ? 1 : 0, now()]);
   markDirty();
   return id;
 }
@@ -120,15 +138,21 @@ export function listSteps(cycleId: string): Step[] {
 
 const clampBlocks = (n: number) => Math.min(50, Math.max(1, Math.round(n) || 1));
 
-/** Adiciona `blocks` etapas (blocos) da matéria ao final do ciclo, cada uma com `targetMin` minutos. */
-export function addStep(cycleId: string, subjectId: string, targetMin: number, blocks = 1) {
+/** Insere, ao final do ciclo, `blocks` etapas de cada matéria (na ordem dada), com `targetMin` minutos cada. */
+function appendSteps(cycleId: string, subjectIds: string[], targetMin: number, blocks: number) {
   let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
   const t = now();
-  for (let i = 0; i < clampBlocks(blocks); i++) {
-    run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, ++pos, Math.max(1, targetMin), t]);
+  for (const subjectId of subjectIds) {
+    for (let i = 0; i < clampBlocks(blocks); i++) {
+      run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, subjectId, ++pos, Math.max(1, targetMin), t]);
+    }
   }
-  markDirty();
+  if (subjectIds.length) markDirty();
 }
+
+/** Adiciona `blocks` etapas (blocos) da matéria ao final do ciclo, cada uma com `targetMin` minutos. */
+export const addStep = (cycleId: string, subjectId: string, targetMin: number, blocks = 1) =>
+  appendSteps(cycleId, [subjectId], targetMin, blocks);
 
 export function updateStep(id: string, subjectId: string, targetMin: number) {
   run('UPDATE cycle_steps SET subject_id=?,target_min=?,updated_at=? WHERE id=?', [subjectId, Math.max(1, targetMin), now(), id]);
@@ -172,15 +196,8 @@ export function reorderSteps(cycleId: string, orderedIds: string[]) {
 export function addMissingSubjects(cycleId: string, targetMin: number, blocks = 1): number {
   const present = new Set(listSteps(cycleId).map((s) => s.subjectId));
   // Ordem de cadastro (rowid), não alfabética: normalmente reflete a ordem do edital.
-  const missing = all<Subject>('SELECT id,name,color,category,note FROM subjects WHERE deleted=0 ORDER BY rowid').filter((s) => !present.has(s.id));
-  let pos = one<{ m: number | null }>('SELECT MAX(position) m FROM cycle_steps WHERE cycle_id=? AND deleted=0', [cycleId])?.m ?? 0;
-  const t = now();
-  for (const s of missing) {
-    for (let i = 0; i < clampBlocks(blocks); i++) {
-      run('INSERT INTO cycle_steps(id,cycle_id,subject_id,position,target_min,updated_at) VALUES(?,?,?,?,?,?)', [uid(), cycleId, s.id, ++pos, Math.max(1, targetMin), t]);
-    }
-  }
-  if (missing.length) markDirty();
+  const missing = all<Subject>('SELECT id,name,color,category,note,extra FROM subjects WHERE deleted=0 AND extra=0 ORDER BY rowid').filter((s) => !present.has(s.id));
+  appendSteps(cycleId, missing.map((s) => s.id), targetMin, blocks);
   return missing.length;
 }
 
@@ -242,7 +259,7 @@ export function closeRunIfComplete(cycleId: string): boolean {
 
 // ---------- Sessões ----------
 export interface SessionRow {
-  id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string; category: string;
+  id: string; runId: string | null; stepId: string | null; subjectId: string; subjectName: string; color: string; category: string; extra: number;
   cycleId: string | null; startedAt: number; endedAt: number; seconds: number; targetSeconds: number | null; kind: string; note: string | null;
 }
 
@@ -252,7 +269,7 @@ const END_SQL = 'COALESCE(s.ended_at, s.started_at + s.seconds * 1000)';
 export const listSessions = () =>
   all<SessionRow>(
     `SELECT s.id, s.run_id AS runId, s.step_id AS stepId, s.subject_id AS subjectId, COALESCE(sub.name,'(matéria removida)') AS subjectName,
-            COALESCE(sub.color,'#999999') AS color, COALESCE(sub.category,'') AS category, s.cycle_id AS cycleId, s.started_at AS startedAt,
+            COALESCE(sub.color,'#999999') AS color, COALESCE(sub.category,'') AS category, COALESCE(sub.extra,0) AS extra, s.cycle_id AS cycleId, s.started_at AS startedAt,
             ${END_SQL} AS endedAt, s.seconds,
             s.target_seconds AS targetSeconds, s.kind, s.note
        FROM sessions s LEFT JOIN subjects sub ON sub.id=s.subject_id
@@ -289,6 +306,10 @@ export function updateSession(id: string, startedAt: number, endedAt: number, se
   markDirty();
 }
 
+/** Segundos estudados numa matéria desde `sinceMs`. */
+export const subjectSecondsSince = (subjectId: string, sinceMs: number) =>
+  one<{ s: number | null }>('SELECT SUM(seconds) s FROM sessions WHERE subject_id=? AND started_at>=? AND deleted=0', [subjectId, sinceMs])?.s ?? 0;
+
 /** Intervalos (início–fim) estudados em cada etapa da volta, em ordem cronológica. */
 export function runSessionTimes(runId: string): Map<string, { start: number; end: number }[]> {
   const m = new Map<string, { start: number; end: number }[]>();
@@ -300,7 +321,3 @@ export function runSessionTimes(runId: string): Map<string, { start: number; end
   return m;
 }
 
-export function updateSessionNote(id: string, note: string) {
-  run('UPDATE sessions SET note=?,updated_at=? WHERE id=?', [note || null, now(), id]);
-  markDirty();
-}

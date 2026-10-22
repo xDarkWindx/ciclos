@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listSteps, listSubjects, moveStep, moveStepTo, renameCycle, reorderSteps,
+  addCycle, addMissingSubjects, addStep, deleteCycle, deleteStep, getActiveCycle, listCycles, listCycleSubjects, listSteps, moveStep, moveStepTo, renameCycle, reorderSteps,
   setActiveCycle, updateStep, type Cycle,
 } from '../db/repo';
 import { useVersion } from '../db/store';
@@ -61,7 +61,7 @@ function CycleEditor({ id, onBack }: { id: string; onBack: () => void }) {
   useVersion();
   const cycle = listCycles().find((c) => c.id === id)!;
   const steps = listSteps(id);
-  const subjects = listSubjects();
+  const subjects = listCycleSubjects(); // avulsas não entram em ciclos
   const [newSubject, setNewSubject] = useState('');
   const [newMin, setNewMin] = useState(40);
   const [newBlocks, setNewBlocks] = useState(1);

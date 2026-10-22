@@ -49,8 +49,6 @@ export function stopAlarm() {
   navigator.vibrate?.(0);
 }
 
-export const isAlarmRinging = () => loop !== undefined;
-
 // ---- Notificação agendada (toca mesmo com o app em segundo plano / tela apagada no Android) ----
 const NOTIF_ID = 4242;
 const CHANNEL_ID = 'alarme-cronometro';
