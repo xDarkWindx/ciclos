@@ -80,4 +80,27 @@ describe('mergeRemote', () => {
     subj(local, 'b', 'novo-local', 200); // criado aqui, ainda não está no Drive
     expect(mergeRemote(remote)).toEqual({ changed: false, remoteBehind: true });
   });
+
+  it('empate de updated_at: preenche coluna que veio com o padrão de uma versão antiga do app', () => {
+    // Web antigo copiou a matéria sem a coluna "extra"; ao atualizar, ela nasceu 0 com o mesmo updated_at.
+    local = new SQL.Database();
+    migrate(local);
+    const remote = new SQL.Database();
+    migrate(remote);
+    local.run("INSERT INTO subjects(id,name,color,updated_at,extra) VALUES('j','Japonês','#000',500,0)");
+    remote.run("INSERT INTO subjects(id,name,color,updated_at,extra,note) VALUES('j','Japonês','#000',500,1,'cap 2')");
+    expect(mergeRemote(remote)).toEqual({ changed: true, remoteBehind: false });
+    expect(local.exec("SELECT extra,note,updated_at FROM subjects WHERE id='j'")[0].values[0]).toEqual([1, 'cap 2', 500]);
+  });
+
+  it('empate de updated_at: se o Drive é que perdeu o valor, pede reenvio sem estragar o local', () => {
+    local = new SQL.Database();
+    migrate(local);
+    const remote = new SQL.Database();
+    migrate(remote);
+    local.run("INSERT INTO subjects(id,name,color,updated_at,extra) VALUES('j','Japonês','#000',500,1)");
+    remote.run("INSERT INTO subjects(id,name,color,updated_at,extra) VALUES('j','Japonês','#000',500,0)");
+    expect(mergeRemote(remote)).toEqual({ changed: false, remoteBehind: true });
+    expect(local.exec("SELECT extra FROM subjects WHERE id='j'")[0].values[0][0]).toBe(1);
+  });
 });
