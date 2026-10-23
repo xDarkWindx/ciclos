@@ -97,7 +97,7 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
               </div>
               <div className="stack tight">
                 {!s.done && (
-                  <button className="btn" disabled={!!timer} onClick={() => run && startStep(s, run.id)}>
+                  <button className="btn" disabled={!!timer} onClick={() => { if (run) { startStep(s, run.id); scrollToTimer(); } }}>
                     {active ? 'Em andamento' : '▶ Iniciar'}
                   </button>
                 )}
@@ -127,6 +127,10 @@ export default function Study({ goTo }: { goTo: (t: string) => void }) {
     </>
   );
 }
+
+/** Leva a tela até o cronômetro (útil ao iniciar uma etapa do fim da lista ou um estudo avulso). */
+const scrollToTimer = () =>
+  requestAnimationFrame(() => document.querySelector('.card.timer')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
 
 /** Cartão do cronômetro em andamento. Só ele redesenha a cada tick (não a tela inteira). */
 function TimerCard({ timer, onCancel }: { timer: TimerState; onCancel: () => void }) {
@@ -186,7 +190,7 @@ function FreeStudy({ disabled, goTo, onNote }: { disabled: boolean; goTo: (t: st
             <span className="tiny muted">{subject ? `últimos 7 dias: ${formatDuration(week)}` : ''}</span>
             <div className="row gap">
               {subject && <button className="btn sm" onClick={() => onNote({ id: subject.id, name: subject.name })}>📝 Anotar</button>}
-              <button className="btn primary" disabled={disabled || !subject || (!free && !(minutes > 0))} onClick={() => subject && startFree(subject, free ? 0 : minutes)}>▶ Iniciar</button>
+              <button className="btn primary" disabled={disabled || !subject || (!free && !(minutes > 0))} onClick={() => { if (subject) { startFree(subject, free ? 0 : minutes); scrollToTimer(); } }}>▶ Iniciar</button>
             </div>
           </div>
         </div>
